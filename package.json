@@ -27,6 +27,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "prepare": "npm run build",
     "dev": "node --experimental-strip-types src/cli.ts"
   },
   "keywords": [
