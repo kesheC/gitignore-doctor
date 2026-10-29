@@ -1,0 +1,58 @@
+{
+  "name": "gitignore-doctor",
+  "version": "0.1.0",
+  "description": "gid — explain & audit .gitignore rules: why a path is ignored, which file and line did it, and what's silently leaking into your repo.",
+  "type": "module",
+  "bin": {
+    "gid": "./dist/cli.js",
+    "gitignore-doctor": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "node --experimental-strip-types src/cli.ts"
+  },
+  "keywords": [
+    "gitignore",
+    "git",
+    "cli",
+    "lint",
+    "audit",
+    "explain",
+    "devtools",
+    "typescript",
+    "zero-dependencies"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kesheC/gitignore-doctor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kesheC/gitignore-doctor/issues"
+  },
+  "homepage": "https://github.com/kesheC/gitignore-doctor#readme",
+  "author": "kesheC"
+}
