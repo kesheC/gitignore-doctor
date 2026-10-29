@@ -60,6 +60,24 @@ DEAD - rules that match nothing (38)
   [DEAD] .gitignore:3
         .gitignore:3 ".dsh-mattskillsdeck-cache/" matches nothing in this repository
         fix: delete the rule, or fix it if the path moved
+  [DEAD] .gitignore:4
+        .gitignore:4 ".dsh-pocket/" matches nothing in this repository
+        fix: delete the rule, or fix it if the path moved
+  [DEAD] .gitignore:5
+        .gitignore:5 ".dsh/" matches nothing in this repository
+        fix: delete the rule, or fix it if the path moved
+  [DEAD] .gitignore:6
+        .gitignore:6 "*.db-shm" matches nothing in this repository
+        fix: delete the rule, or fix it if the path moved
+  [DEAD] .gitignore:7
+        .gitignore:7 "*.db-wal" matches nothing in this repository
+        fix: delete the rule, or fix it if the path moved
+  [DEAD] .gitignore:10
+        .gitignore:10 "projects/*/" matches nothing in this repository
+        fix: delete the rule, or fix it if the path moved
+  [DEAD] .gitignore:13
+        .gitignore:13 "Thumbs.db" matches nothing in this repository
+        fix: delete the rule, or fix it if the path moved
   ... and 30 more DEAD finding(s); use --all to see them
 
 summary: 1 leak, 1 missing, 38 dead, 0 conflict
