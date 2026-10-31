@@ -1,6 +1,6 @@
 {
   "name": "gitignore-doctor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "gid — explain & audit .gitignore rules: why a path is ignored, which file and line did it, and what's silently leaking into your repo.",
   "type": "module",
   "bin": {
@@ -21,7 +21,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20.11"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

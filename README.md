@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/kesheC/gitignore-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/kesheC/gitignore-doctor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%3E%3D20.11-informational.svg)](https://nodejs.org)
 [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-0-success.svg)](./package.json)
 
 ---
@@ -20,15 +20,26 @@ and says nothing about dead rules, missing rules, or files already leaked into h
 
 ## Install
 
-```bash
-# not published to npm yet — install from the repository
-npm install -g github:kesheC/gitignore-doctor
+`gid` is **not published to the npm registry** — that name belongs to an unrelated
+package. Every release ships a tarball you can install directly:
 
-# or from a tarball you built yourself
-npm pack && npm install -g ./gitignore-doctor-0.1.0.tgz
+```bash
+npm install -g https://github.com/kesheC/gitignore-doctor/releases/download/v0.1.1/gitignore-doctor-0.1.1.tgz
+gid --version
 ```
 
-Requires Node.js >= 20. **Zero runtime dependencies** — everything is Node stdlib.
+Or build it from a checkout:
+
+```bash
+git clone https://github.com/kesheC/gitignore-doctor.git
+cd gitignore-doctor
+npm ci && npm run build && npm link
+```
+
+Requires Node.js >= 20.11. **Zero runtime dependencies** — everything is Node stdlib.
+
+> `npm install -g git+https://github.com/...` does **not** work on npm 11: a global
+> install skips `devDependencies`, so the `prepare` build finds no `tsc`.
 
 ## Quick start
 
@@ -275,12 +286,7 @@ Exported: `parseIgnoreFile`, `matchPath`, `ruleMatches`, `explainPath`, `checkRe
 
 **精确知道一个文件为什么被忽略，以及仓库里到底混进了什么不该进的东西。**
 
-[![CI](https://github.com/kesheC/gitignore-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/kesheC/gitignore-doctor/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
-[![Dependencies](https://img.shields.io/badge/runtime%20dependencies-0-success.svg)](./package.json)
-
-## 痛点
+## 中文说明
 
 `.gitignore` 是唯一没人 review 的配置文件。规则在项目之间抄来抄去，否定规则悄无
 声息地输给更早的目录排除，而最危险的失效方式完全看不见：**git 早就把文件跟踪了，
@@ -289,15 +295,23 @@ Exported: `parseIgnoreFile`, `matchPath`, `ruleMatches`, `explainPath`, `checkRe
 
 ## 安装
 
-```bash
-# 目前未发布到 npm，请从仓库安装
-npm install -g github:kesheC/gitignore-doctor
+`gid` **没有发布到 npm registry**（那个名字属于另一个不相干的包）。每个 release
+都附带可直接安装的 tarball：
 
-# 或者自己打包再全局安装
-npm pack && npm install -g ./gitignore-doctor-0.1.0.tgz
+```bash
+npm install -g https://github.com/kesheC/gitignore-doctor/releases/download/v0.1.1/gitignore-doctor-0.1.1.tgz
+gid --version
 ```
 
-需要 Node.js >= 20。**零运行时依赖** —— 全部基于 Node 标准库。
+或者从源码自己编译：
+
+```bash
+git clone https://github.com/kesheC/gitignore-doctor.git
+cd gitignore-doctor
+npm ci && npm run build && npm link
+```
+
+需要 Node.js >= 20.11。**零运行时依赖** —— 全部基于 Node 标准库。
 
 ## 快速开始
 
