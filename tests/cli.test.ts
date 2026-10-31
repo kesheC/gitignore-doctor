@@ -47,6 +47,13 @@ describe.skipIf(!BUILT)("gid CLI", () => {
     expect(result.stdout).toContain("gid explain <path>");
   });
 
+  it("documents the truncation rule in --all, not just the flag name", async () => {
+    const root = await tree({});
+    const result = run(["--help"], root);
+    expect(result.stdout).toContain("the default prints 8 per kind");
+    expect(result.stdout).toContain("then a line saying how many more there are");
+  });
+
   it("prints the version for --version", async () => {
     const root = await tree({});
     const result = run(["--version"], root);

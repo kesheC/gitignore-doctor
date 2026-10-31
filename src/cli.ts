@@ -45,8 +45,10 @@ Options:
   --json        Machine readable output.
   --global      Also apply core.excludesFile / ~/.config/git/ignore.
   --strict      In check: treat DEAD and CONFLICT as failures too.
-  --all         In check: print every finding (default shows the first 8 per kind).
-  --verbose     In check: give destructive advice for DEAD rules.
+  --all         In check: print every finding (the default prints 8 per kind,
+                then a line saying how many more there are).
+  --verbose     In check: blunt advice for DEAD rules (default advice says a
+                dead rule may just be waiting for an accident).
   --why         In list: add a per-rule explanation.
   --force       In init: overwrite an existing .gitignore.
   -h, --help    Show this help.

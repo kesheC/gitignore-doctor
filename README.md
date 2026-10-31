@@ -90,29 +90,29 @@ MISSING - should be ignored but is not (1)
         fix: add a rule such as `.env` to .gitignore
 DEAD - rules that match nothing (39)
   [DEAD] .gitignore:2
-        .gitignore:2 ".dsh-meow/" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:2 ".dsh-meow/" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   [DEAD] .gitignore:3
-        .gitignore:3 ".dsh-mattskillsdeck-cache/" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:3 ".dsh-mattskillsdeck-cache/" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   [DEAD] .gitignore:4
-        .gitignore:4 ".dsh-pocket/" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:4 ".dsh-pocket/" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   [DEAD] .gitignore:5
-        .gitignore:5 ".dsh/" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:5 ".dsh/" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   [DEAD] .gitignore:6
-        .gitignore:6 "*.db-shm" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:6 "*.db-shm" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   [DEAD] .gitignore:7
-        .gitignore:7 "*.db-wal" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:7 "*.db-wal" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   [DEAD] .gitignore:10
-        .gitignore:10 "projects/*/" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:10 "projects/*/" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   [DEAD] .gitignore:13
-        .gitignore:13 "Thumbs.db" matches nothing in this repository
-        fix: delete the rule, or fix it if the path moved
+        .gitignore:13 "Thumbs.db" matches no file right now
+        fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   ... and 31 more DEAD finding(s); use --all to see them
 
 summary: 1 leak, 1 missing, 39 dead, 0 conflict
@@ -187,14 +187,17 @@ Four kinds of finding, each with a concrete fix:
 | **DEAD** | A rule that matches zero files in this repository — usually stale copy-paste. |
 | **CONFLICT** | A rule fully shadowed by a later rule, so it can never decide anything. |
 
-Exit code is `1` when there is a LEAK or MISSING (or any finding with `--strict`),
-`0` otherwise.
+Exit codes: `0` clean, `1` when there is a LEAK or MISSING (or any finding
+with `--strict`), `2` on a usage error — including running it outside a git work
+tree, where `check` refuses to pretend the tree is clean. Unknown or misspelled
+options are also a `2`, never a silent no-op.
 
 ```bash
-gid check            # human readable, 8 findings per kind
-gid check --all      # every finding
-gid check --strict   # DEAD and CONFLICT also fail the build
-gid check --json     # full machine-readable report
+gid check             # human readable, first 8 findings per kind
+gid check --all       # every finding (without it: 8 per kind, then "and N more")
+gid check --strict    # DEAD and CONFLICT also fail the build
+gid check --verbose   # per-finding detail, e.g. the blunt advice for DEAD rules
+gid check --json      # full machine-readable report
 ```
 
 ### `gid list [--why]`
@@ -212,18 +215,25 @@ repository: <temp>/gid-demo
      4  .dsh-pocket/                           0  (matches 0)
      5  .dsh/                                  0  (matches 0)
    ...
-    47  *.log                                  2
+    40  node_modules/                          0  (matches 0)
+   ...
+    47  *.log                                  1
     48  tmp/                                   0  (matches 0)
 
 total: 40 rule(s)
+hits = files whose name matches the pattern, counted before later rules win; they are not the number of files this rule actually ignores.
 ```
 
 `--why` adds a one-line explanation of what the rule's shape actually means:
 
 ```text
-    40  node_modules/                          1
-        why: ignore, directories only, matches at any depth
+    47  *.log                                  1
+        why: ignore, matches at any depth
 ```
+
+In this fixture `trace.log` is the only file that matches a rule, so 39 rules
+report `0` hits — that is what a rotted `.gitignore` looks like, and `gid check`
+turns it into DEAD findings.
 
 ### `gid init [--detect] [--force]`
 
@@ -287,10 +297,14 @@ Exported: `parseIgnoreFile`, `matchPath`, `ruleMatches`, `explainPath`, `checkRe
 - **Does it replace `git check-ignore`?** No. `gid` understands the same rules but
   answers different questions (why, plus what is dead or missing). `git` is still the
   authority on what is actually tracked.
-- **Global gitignore** (`core.excludesFile`) is **off by default**; pass `--global`
-  to `explain` to include it. It is read from `~/.config/git/ignore` and
-  `~/.gitignore_global`.
-- **`.git/info/exclude`** is included for `explain`; excluded from `check`.
+- **Global gitignore** is **off by default**; pass `--global` to `explain` or `list`
+  to include it. Resolution order: `core.excludesFile` if git has one set, otherwise
+  `$XDG_CONFIG_HOME/git/ignore`, then `~/.config/git/ignore`, then `~/.gitignore_global`.
+- **`.git/info/exclude`** is included for `explain` and `list`; excluded from `check`,
+  which audits the files `.gitignore` itself is responsible for.
+- **Case sensitivity follows git.** `core.ignorecase=true` (the default on Windows and
+  macOS) makes matching case-insensitive, exactly like git; on Linux it stays
+  case-sensitive unless you set it. `explain` reports the resolved value as `ignoreCase`.
 - **DEAD is a heuristic.** A rule like `*.pyc` is dead only because no `.pyc` exists
   *right now*; that does not make it useless. `check` never fails on DEAD unless you
   ask for `--strict`.
@@ -409,13 +423,16 @@ note:   the parent directory 'node_modules' is excluded, so git never looks insi
 | **DEAD** | 这条规则在本仓库里匹配 0 个文件，通常是抄来忘了删的。 |
 | **CONFLICT** | 规则被后面更宽的规则完全遮蔽，永远轮不到它生效。 |
 
-存在 LEAK 或 MISSING 时退出码为 `1`（`--strict` 下任何问题都为 `1`），否则 `0`。
+退出码：`0` 干净，`1` 表示存在 LEAK 或 MISSING（`--strict` 下任何问题都为 `1`），
+`2` 表示用法错误 —— 包括在非 git 工作区里运行：这种情况下 `check` 会拒绝假装干净。
+拼错的选项同样是 `2`，绝不会被静默忽略。
 
 ```bash
-gid check            # 人类可读，每类最多 8 条
-gid check --all      # 全部列出
-gid check --strict   # DEAD / CONFLICT 也算失败
-gid check --json     # 完整机器可读报告
+gid check             # 人类可读，每类最多 8 条
+gid check --all       # 全部列出（不加时每类打印 8 条，然后一行 "and N more"）
+gid check --strict    # DEAD / CONFLICT 也算失败
+gid check --verbose   # 每条问题给出更直白的建议（例如 DEAD 规则）
+gid check --json      # 完整机器可读报告
 ```
 
 ### `gid list [--why]`
@@ -424,9 +441,15 @@ gid check --json     # 完整机器可读报告
 什么程度。`--why` 追加一行解释这条规则的语义。
 
 ```text
-    40  node_modules/                          1
+    40  node_modules/                          0  (matches 0)
         why: ignore, directories only, matches at any depth
 ```
+
+这份 fixture 里只有 `trace.log` 命中规则（`*.log`，47 行），另外 39 条都是 0 命中 ——
+这就是一份「烂掉的」`.gitignore` 长什么样，`gid check` 会把这些变成 DEAD。
+
+`gid list` 结尾还会打印一行说明：`hits` 统计的是「名字匹配这条规则的文件数」，
+是后续规则生效**之前**的数字，不等于这条规则最终实际忽略了几个文件。
 
 ### `gid init [--detect] [--force]`
 
@@ -467,9 +490,14 @@ CLI 只是纯库外面的一层壳。`src/index.ts` 里没有任何 `process.arg
 
 - **它替代 `git check-ignore` 吗？** 不。`gid` 懂同样的规则，但回答的是不同的问题
   （为什么、以及哪些是死的/缺的）。「到底什么被跟踪」的权威仍然是 git 自己。
-- **全局 gitignore**（`core.excludesFile`）默认**关闭**；`gid explain --global` 才
-  纳入，读取 `~/.config/git/ignore` 与 `~/.gitignore_global`。
-- **`.git/info/exclude`** 在 `explain` 中生效，在 `check` 中不参与。
+- **全局 gitignore** 默认**关闭**；`gid explain --global` 或 `gid list --global` 才
+  纳入。查找顺序：git 配了 `core.excludesFile` 就用它，否则依次找
+  `$XDG_CONFIG_HOME/git/ignore`、`~/.config/git/ignore`、`~/.gitignore_global`。
+- **`.git/info/exclude`** 在 `explain` 与 `list` 中生效，在 `check` 中不参与（`check`
+  只审 `.gitignore` 该负责的部分）。
+- **大小写跟随 git。** `core.ignorecase=true`（Windows 与 macOS 的默认值）时匹配不区分
+  大小写，和 git 一致；Linux 上默认区分，除非你自己配了。`explain` 会把解析出的值作为
+  `ignoreCase` 返回。
 - **DEAD 是启发式判断。** `*.pyc` 现在匹配不到，只说明此刻没有 `.pyc`，不代表这条
   规则没用。不加 `--strict` 时 `check` 不会因 DEAD 失败。
 - **CONFLICT 也是启发式** —— 只报告被同文件内更宽规则**完全**遮蔽的规则。
