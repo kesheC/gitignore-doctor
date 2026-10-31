@@ -28,6 +28,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "node --experimental-strip-types src/cli.ts",
+    "demo": "node demo/make-fixture.mjs",
     "prepack": "npm run build"
   },
   "keywords": [

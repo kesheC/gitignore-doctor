@@ -51,12 +51,18 @@ gid check
 ```
 
 Real output, run against a copy of a real 53-line `.gitignore` in a temp repo
-(DEAD findings truncated — the real run printed 38 of them):
+(DEAD findings truncated — the real run printed 39 of them). The fixture lives
+in this repo, so you can reproduce it byte for byte; the script prints the
+`gid check` command to run against it:
+
+```bash
+node demo/make-fixture.mjs
+```
 
 ```text
 $ gid check
 repository: C:\Users\Administrator\AppData\Local\Temp\gid-demo
-scanned:    8 entries, 1 ignore file(s)
+scanned:    4 entries, 1 ignore file(s)
 
 LEAK - tracked despite being ignored (1)
   [LEAK] trace.log
@@ -66,7 +72,7 @@ MISSING - should be ignored but is not (1)
   [MISSING] .env
         .env looks like an environment file but no ignore rule covers it
         fix: add a rule such as `.env` to .gitignore
-DEAD - rules that match nothing (38)
+DEAD - rules that match nothing (39)
   [DEAD] .gitignore:2
         .gitignore:2 ".dsh-meow/" matches nothing in this repository
         fix: delete the rule, or fix it if the path moved
@@ -91,9 +97,9 @@ DEAD - rules that match nothing (38)
   [DEAD] .gitignore:13
         .gitignore:13 "Thumbs.db" matches nothing in this repository
         fix: delete the rule, or fix it if the path moved
-  ... and 30 more DEAD finding(s); use --all to see them
+  ... and 31 more DEAD finding(s); use --all to see them
 
-summary: 1 leak, 1 missing, 38 dead, 0 conflict
+summary: 1 leak, 1 missing, 39 dead, 0 conflict
 result:  FAIL (2 blocking)
 ```
 
@@ -323,11 +329,16 @@ gid check
 ```
 
 真实输出（针对一份 53 行的真实 `.gitignore` 副本，在临时仓库里运行；DEAD 只截取
-前几条，实际打印了 38 条）。完整输出见上方英文章节。
+前几条，实际打印了 39 条）。完整输出见上方英文章节。这个临时仓库由仓库里自带的
+脚本生成，输出可以逐字节复现：
+
+```bash
+node demo/make-fixture.mjs
+```
 
 ```text
 $ gid check
-summary: 1 leak, 1 missing, 38 dead, 0 conflict
+summary: 1 leak, 1 missing, 39 dead, 0 conflict
 result:  FAIL (2 blocking)
 ```
 
