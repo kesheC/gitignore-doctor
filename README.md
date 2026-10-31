@@ -24,7 +24,7 @@ and says nothing about dead rules, missing rules, or files already leaked into h
 package. Every release ships a tarball you can install directly:
 
 ```bash
-npm install -g https://github.com/kesheC/gitignore-doctor/releases/download/v0.1.1/gitignore-doctor-0.1.1.tgz
+npm install -g https://github.com/kesheC/gitignore-doctor/releases/latest/download/gitignore-doctor.tgz
 gid --version
 ```
 
@@ -316,7 +316,7 @@ up in [CHANGELOG.md](CHANGELOG.md).
 都附带可直接安装的 tarball：
 
 ```bash
-npm install -g https://github.com/kesheC/gitignore-doctor/releases/download/v0.1.1/gitignore-doctor-0.1.1.tgz
+npm install -g https://github.com/kesheC/gitignore-doctor/releases/latest/download/gitignore-doctor.tgz
 gid --version
 ```
 
