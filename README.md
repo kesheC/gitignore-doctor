@@ -52,16 +52,19 @@ gid check
 
 Real output, run against a copy of a real 53-line `.gitignore` in a temp repo
 (DEAD findings truncated — the real run printed 39 of them). The fixture lives
-in this repo, so you can reproduce it byte for byte; the script prints the
+in this repo, so you can reproduce it line for line; the script prints the
 `gid check` command to run against it:
 
 ```bash
 node demo/make-fixture.mjs
 ```
 
+Paths are printed as `<temp>/...` here; your own machine will print its real
+temp directory. Nothing else is rewritten.
+
 ```text
 $ gid check
-repository: C:\Users\Administrator\AppData\Local\Temp\gid-demo
+repository: <temp>/gid-demo
 scanned:    4 entries, 1 ignore file(s)
 
 LEAK - tracked despite being ignored (1)
@@ -188,7 +191,7 @@ spot a `.gitignore` that has rotted:
 
 ```text
 $ gid list
-repository: C:\Users\Administrator\AppData\Local\Temp\gid-demo
+repository: <temp>/gid-demo
 
 .gitignore
      2  .dsh-meow/                             0  (matches 0)
@@ -216,7 +219,7 @@ naming the evidence for every section:
 
 ```text
 $ gid init
-wrote C:\Users\Administrator\AppData\Local\Temp\gid-init-demo\.gitignore
+wrote <temp>/gid-init-demo/.gitignore
 detected:
   node         <- package.json
   python       <- pyproject.toml
@@ -284,6 +287,12 @@ Exported: `parseIgnoreFile`, `matchPath`, `ruleMatches`, `explainPath`, `checkRe
   `git rm --cached`; rotating the credential and rewriting history is on you.
 - **Not a formatter.** No sorting, no whitespace opinions.
 
+## Security and changes
+
+Found a vulnerability? Please do not open a public issue — [SECURITY.md](SECURITY.md)
+explains the private reporting channel and what to include. Every release is written
+up in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](./LICENSE) (c) 2026 kesheC
@@ -330,7 +339,7 @@ gid check
 
 真实输出（针对一份 53 行的真实 `.gitignore` 副本，在临时仓库里运行；DEAD 只截取
 前几条，实际打印了 39 条）。完整输出见上方英文章节。这个临时仓库由仓库里自带的
-脚本生成，输出可以逐字节复现：
+脚本生成，输出可以逐行复现（只有临时目录路径与本机不同）：
 
 ```bash
 node demo/make-fixture.mjs
@@ -400,7 +409,7 @@ gid check --json     # 完整机器可读报告
 
 ```text
 $ gid init
-wrote C:\Users\Administrator\AppData\Local\Temp\gid-init-demo\.gitignore
+wrote <temp>/gid-init-demo/.gitignore
 detected:
   node         <- package.json
   python       <- pyproject.toml
@@ -442,6 +451,11 @@ CLI 只是纯库外面的一层壳。`src/index.ts` 里没有任何 `process.arg
 - **它不改写你的历史。** 密钥已经进了 commit，`gid` 只能告诉你 `git rm --cached`；
   轮换凭据、重写历史得你自己来。
 - **它不是格式化工具。** 不排序、不对空白发表意见。
+
+## 安全与变更
+
+发现安全问题请**不要**开公开 issue —— [SECURITY.md](SECURITY.md) 说明了私密上报渠道以及
+需要提供哪些信息。每个版本的改动都记在 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可证
 
