@@ -24,11 +24,12 @@
     "node": ">=20.11"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "node --experimental-strip-types src/cli.ts",
     "demo": "node demo/make-fixture.mjs",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "npm run build"
   },
   "keywords": [

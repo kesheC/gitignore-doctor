@@ -6,3 +6,5 @@ coverage/
 .DS_Store
 *.log
 npm-debug.log*
+pack-meta.json
+RELEASE_NOTES.md

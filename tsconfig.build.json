@@ -3,7 +3,12 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "noEmit": false
+    "noEmit": false,
+    // The package ships dist/ only (see "files" in package.json), so a map
+    // whose "sources" point at src/ links to something the reader can never
+    // open. Editors get maps from tsconfig.json; the published build does not.
+    "sourceMap": false,
+    "declarationMap": false
   },
   "include": [
     "src"
