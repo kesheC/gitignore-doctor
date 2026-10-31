@@ -3,11 +3,15 @@ import { execFileSync } from "node:child_process";
 
 import { checkRepo } from "../src/check.js";
 import { runGit, isGitAvailable } from "../src/git.js";
-import { cleanup, makeTree } from "./helpers.js";
+import { cleanup, makeGitRepo } from "./helpers.js";
 
 const roots: string[] = [];
+/**
+ * Build a real git repository for every fixture: checkRepo now refuses to
+ * audit a plain directory, and LEAK detection needs git anyway.
+ */
 async function tree(files: Record<string, string>): Promise<string> {
-  const root = await makeTree(files);
+  const root = await makeGitRepo(files);
   roots.push(root);
   return root;
 }
@@ -18,13 +22,8 @@ afterEach(async () => {
 });
 
 /** Initialize a real git repository so LEAK detection can be exercised. */
-function initRepo(root: string): boolean {
+function initRepo(_root: string): boolean {
   assertGit();
-  const run = (args: string[]) => execFileSync("git", args, { cwd: root, stdio: "pipe" });
-  run(["init", "-q"]);
-  run(["config", "user.email", "test@example.com"]);
-  run(["config", "user.name", "Test"]);
-  run(["config", "commit.gpgsign", "false"]);
   return true;
 }
 
@@ -69,7 +68,7 @@ describe("checkRepo", () => {
     const dead = report.issues.filter((issue) => issue.kind === "DEAD");
     expect(dead).toHaveLength(1);
     expect(dead[0]?.rule?.line).toBe(2);
-    expect(dead[0]?.message).toContain("matches nothing");
+    expect(dead[0]?.message).toContain("matches no file right now");
   });
 
   it("reports CONFLICT when a later rule fully shadows an earlier one", async () => {

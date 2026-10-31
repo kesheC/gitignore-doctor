@@ -3,11 +3,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as path from "node:path";
 
-import { cleanup, makeTree } from "./helpers.js";
+import { cleanup, makeGitRepo } from "./helpers.js";
 
 const roots: string[] = [];
+/** Every fixture is a real git repository: check and init now require one. */
 async function tree(files: Record<string, string>): Promise<string> {
-  const root = await makeTree(files);
+  const root = await makeGitRepo(files);
   roots.push(root);
   return root;
 }

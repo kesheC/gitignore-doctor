@@ -10,7 +10,7 @@ import { homedir } from "node:os";
 import { parseIgnoreFile } from "./rules.js";
 import { matchPath, relativeWithin, segments, toPosix } from "./matcher.js";
 import type { ExplainResult, IgnoreFile, IgnoreRule, MatchResult } from "./types.js";
-import { isTracked } from "./git.js";
+import { isCaseInsensitive, isTracked, globalExcludesFile } from "./git.js";
 
 /** Walk up from `startDir` looking for a directory that contains `.git`. */
 export async function findRepoRoot(startDir: string): Promise<string> {
@@ -22,6 +22,27 @@ export async function findRepoRoot(startDir: string): Promise<string> {
     } catch {
       const parent = path.dirname(current);
       if (parent === current) return path.resolve(startDir);
+      current = parent;
+    }
+  }
+}
+
+/**
+ * Walk up from startDir looking for a directory that contains .git.
+ *
+ * Returns null when there is none, which lets callers tell "not a git
+ * repository" apart from "the root is the starting directory" - a
+ * distinction findRepoRoot cannot express.
+ */
+export async function findRepoRootOrNull(startDir: string): Promise<string | null> {
+  let current = path.resolve(startDir);
+  for (;;) {
+    try {
+      await stat(path.join(current, ".git"));
+      return current;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return null;
       current = parent;
     }
   }
@@ -44,23 +65,48 @@ async function exists(absolute: string): Promise<boolean> {
   }
 }
 
+/** Options for {@link loadIgnoreFile}. */
+interface LoadOptions {
+  /**
+   * Directory the rules are anchored to, POSIX relative to the repo root.
+   *
+   * Defaults to the directory the file physically lives in, which is right for
+   * .gitignore files. Files that are not tied to a directory in the working
+   * tree - `.git/info/exclude` and the global excludes file - must pass `""`,
+   * because their rules apply to the whole repository no matter where the file
+   * happens to sit on disk.
+   */
+  baseDir?: string;
+  /** Compile matchers case-insensitively (mirrors `core.ignorecase`). */
+  ignoreCase?: boolean;
+}
+
 /** Read one ignore file into a structured record, or null when missing. */
 async function loadIgnoreFile(
   root: string,
   relative: string,
   startOrder: number,
+  options: LoadOptions = {},
 ): Promise<IgnoreFile | null> {
   const sourceAbs = path.join(root, relative.split("/").join(path.sep));
   const content = await readIfPresent(sourceAbs);
   if (content === null) return null;
-  const baseDir = relative === ".gitignore" ? "" : toPosix(path.dirname(relative));
+  const baseDir = options.baseDir ?? defaultBaseDir(relative);
   const rules = parseIgnoreFile(content, {
     source: relative,
     sourceAbs,
-    baseDir: baseDir === "." ? "" : baseDir,
+    baseDir,
     startOrder,
+    ignoreCase: options.ignoreCase === true,
   });
-  return { source: relative, sourceAbs, baseDir: baseDir === "." ? "" : baseDir, rules };
+  return { source: relative, sourceAbs, baseDir, rules };
+}
+
+/** The directory a .gitignore file anchors its rules to. */
+function defaultBaseDir(relative: string): string {
+  if (relative === ".gitignore") return "";
+  const dir = toPosix(path.dirname(relative));
+  return dir === "." ? "" : dir;
 }
 
 export interface CollectOptions {
@@ -70,6 +116,11 @@ export interface CollectOptions {
   global?: boolean;
   /** Directory whose .gitignore chain should be followed; undefined = the whole tree. */
   forPath?: string;
+  /**
+   * Compile matchers case-insensitively. Undefined = ask git for
+   * core.ignorecase, falling back to the platform default.
+   */
+  ignoreCase?: boolean;
 }
 
 /**
@@ -84,8 +135,9 @@ export async function collectIgnoreFiles(
 ): Promise<IgnoreFile[]> {
   const files: IgnoreFile[] = [];
   let order = 0;
+  const ignoreCase = options.ignoreCase ?? (await isCaseInsensitive(root));
 
-  const rootFile = await loadIgnoreFile(root, ".gitignore", order);
+  const rootFile = await loadIgnoreFile(root, ".gitignore", order, { ignoreCase });
   if (rootFile) {
     files.push(rootFile);
     order += rootFile.rules.length;
@@ -96,7 +148,7 @@ export async function collectIgnoreFiles(
     for (let depth = 1; depth <= parts.length; depth++) {
       const dir = parts.slice(0, depth).join("/");
       const relative = dir + "/.gitignore";
-      const file = await loadIgnoreFile(root, relative, order);
+      const file = await loadIgnoreFile(root, relative, order, { ignoreCase });
       if (file) {
         files.push(file);
         order += file.rules.length;
@@ -106,7 +158,7 @@ export async function collectIgnoreFiles(
     const discovered = await discoverIgnoreFiles(root);
     for (const relative of discovered) {
       if (relative === ".gitignore") continue;
-      const file = await loadIgnoreFile(root, relative, order);
+      const file = await loadIgnoreFile(root, relative, order, { ignoreCase });
       if (file) {
         files.push(file);
         order += file.rules.length;
@@ -115,7 +167,12 @@ export async function collectIgnoreFiles(
   }
 
   if (options.gitInfoExclude !== false) {
-    const info = await loadIgnoreFile(root, ".git/info/exclude", order);
+    // Rules in .git/info/exclude apply to the whole work tree; they are not
+    // anchored to the ".git/info" directory that happens to hold the file.
+    const info = await loadIgnoreFile(root, ".git/info/exclude", order, {
+      baseDir: "",
+      ignoreCase,
+    });
     if (info) {
       files.push(info);
       order += info.rules.length;
@@ -125,7 +182,11 @@ export async function collectIgnoreFiles(
   if (options.global) {
     const resolved = await resolveGlobalIgnore(root);
     if (resolved) {
-      const file = await loadIgnoreFile("", resolved.source, order);
+      // Same story: a global excludes file is anchored nowhere in particular.
+      const file = await loadIgnoreFile("", resolved.source, order, {
+        baseDir: "",
+        ignoreCase,
+      });
       if (file) files.push(file);
     }
   }
@@ -133,12 +194,44 @@ export async function collectIgnoreFiles(
   return files;
 }
 
-async function resolveGlobalIgnore(root: string): Promise<{ source: string } | null> {
-  const home = homedir();
-  const candidates = [".config/git/ignore", ".gitignore_global"];
+/**
+ * Locate the global excludes file git would use.
+ *
+ * core.excludesFile wins when it is set; otherwise git falls back to
+ * $XDG_CONFIG_HOME/git/ignore and then ~/.gitignore_global.
+ */
+export function resolveHomeDir(): string {
+  const env = process.env;
+  const fromEnv = env["HOME"];
+  if (fromEnv !== undefined && fromEnv !== "") return fromEnv;
+  const drive = env["HOMEDRIVE"];
+  const homePath = env["HOMEPATH"];
+  if (drive !== undefined && drive !== "" && homePath !== undefined && homePath !== "") {
+    return drive + homePath;
+  }
+  const profile = env["USERPROFILE"];
+  if (profile !== undefined && profile !== "") return profile;
+  return homedir();
+}
+
+export async function resolveGlobalIgnore(
+  root: string,
+  home: string = resolveHomeDir(),
+): Promise<{ source: string; configured: boolean } | null> {
+  const configured = await globalExcludesFile(root, home);
+  if (configured !== null) {
+    const absolute = path.isAbsolute(configured)
+      ? configured
+      : path.join(home, configured.split("/").join(path.sep));
+    if (await exists(absolute)) return { source: toPosix(absolute), configured: true };
+  }
+  const candidates: string[] = [];
+  const xdg = process.env["XDG_CONFIG_HOME"];
+  if (xdg !== undefined && xdg !== "") candidates.push(toPosix(path.join(xdg, "git", "ignore")));
+  candidates.push(path.join(home, ".config", "git", "ignore"));
+  candidates.push(path.join(home, ".gitignore_global"));
   for (const candidate of candidates) {
-    const absolute = path.join(home, candidate.split("/").join(path.sep));
-    if (await exists(absolute)) return { source: toPosix(absolute) };
+    if (await exists(candidate)) return { source: toPosix(candidate), configured: false };
   }
   return null;
 }
@@ -217,7 +310,12 @@ export async function explainPath(
   const isDir = info !== null && info.isDirectory();
   const existsOnDisk = info !== null;
 
-  const files = await collectIgnoreFiles(root, { forPath: relative, global: options.global });
+  const ignoreCase = await isCaseInsensitive(root);
+  const files = await collectIgnoreFiles(root, {
+    forPath: relative,
+    global: options.global,
+    ignoreCase,
+  });
   const rules = flattenRules(files);
   const result: MatchResult = matchPath(rules, relative, isDir);
   const tracked = await isTracked(root, relative);
@@ -239,6 +337,7 @@ export async function explainPath(
     reason,
     note,
     whitelistedBy,
+    ignoreCase,
   };
 }
 

@@ -77,6 +77,8 @@ export interface ExplainResult extends MatchResult {
   exists: boolean;
   /** Whether the path is tracked by git (null when git is unavailable). */
   tracked: boolean | null;
+  /** Whether matching was case-insensitive (mirrors `core.ignorecase`). */
+  ignoreCase: boolean;
   /** Human readable explanation of the verdict. */
   reason: string;
   /** Remediation hint. */
@@ -108,6 +110,8 @@ export interface CheckOptions {
   strict?: boolean;
   /** Hard cap on the number of filesystem entries visited. */
   maxEntries?: number;
+  /** Include destructive advice (delete the rule) for DEAD findings. */
+  verbose?: boolean;
 }
 
 /** Result of a repository audit. */
@@ -121,6 +125,10 @@ export interface CheckReport {
   ignoreFiles: string[];
   /** Whether git was available; LEAK detection needs it. */
   gitAvailable: boolean;
+  /** Whether matching was case-insensitive (mirrors `core.ignorecase`). */
+  ignoreCase: boolean;
+  /** Whether the directory is inside a git working tree. */
+  isRepository: boolean;
   /** Whether the audit should be treated as a failure by the CLI. */
   failed: boolean;
 }

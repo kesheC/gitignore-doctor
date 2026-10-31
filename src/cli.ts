@@ -10,7 +10,14 @@ import { readdir, stat, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { explainPath, findRepoRoot, collectIgnoreFiles, flattenRules, normalizeTarget } from "./resolve.js";
+import {
+  explainPath,
+  findRepoRoot,
+  findRepoRootOrNull,
+  collectIgnoreFiles,
+  flattenRules,
+  normalizeTarget,
+} from "./resolve.js";
 import { relativeWithin } from "./matcher.js";
 import { checkRepo } from "./check.js";
 import { generateIgnoreFile, ignoreFileTarget, listStacks } from "./init.js";
@@ -38,7 +45,8 @@ Options:
   --json        Machine readable output.
   --global      Also apply core.excludesFile / ~/.config/git/ignore.
   --strict      In check: treat DEAD and CONFLICT as failures too.
-  --all         In check: print every finding instead of the first 8 per kind.
+  --all         In check: print every finding (default shows the first 8 per kind).
+  --verbose     In check: give destructive advice for DEAD rules.
   --why         In list: add a per-rule explanation.
   --force       In init: overwrite an existing .gitignore.
   -h, --help    Show this help.
@@ -92,6 +100,29 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
 class UsageError extends Error {}
 
+/** Options each subcommand understands; anything else is a usage error. */
+const COMMAND_OPTIONS: Record<string, string[]> = {
+  explain: ["cwd", "json", "global"],
+  check: ["cwd", "json", "strict", "all", "verbose"],
+  list: ["cwd", "json", "why", "global"],
+  init: ["cwd", "json", "detect", "force"],
+};
+
+/** Reject flags the chosen subcommand does not implement. */
+function assertKnownOptions(command: string, args: ParsedArgs): void {
+  const allowed = COMMAND_OPTIONS[command];
+  if (!allowed) return;
+  const permitted = new Set(allowed);
+  for (const flag of args.flags) {
+    if (permitted.has(flag)) continue;
+    throw new UsageError("unknown option for 'gid " + command + "': --" + flag);
+  }
+  for (const name of args.values.keys()) {
+    if (permitted.has(name)) continue;
+    throw new UsageError("unknown option for 'gid " + command + "': --" + name);
+  }
+}
+
 async function main(argv: string[]): Promise<number> {
   let args: ParsedArgs;
   try {
@@ -116,6 +147,7 @@ async function main(argv: string[]): Promise<number> {
   const json = args.flags.has("json");
 
   try {
+    assertKnownOptions(args.command, args);
     switch (args.command) {
       case "explain":
         return await runExplain(args, cwd, json);
@@ -172,7 +204,11 @@ async function runExplain(args: ParsedArgs, cwd: string, json: boolean): Promise
   if (result.whitelistedBy) {
     lines.push("warn:   \"" + result.whitelistedBy.raw + "\" at " + result.whitelistedBy.source + ":" + result.whitelistedBy.line + " would re-include it, but a parent directory is excluded first");
   }
-  lines.push("note:   " + (result.note ?? result.reason));
+  if (!result.exists) {
+    lines.push("note:   " + (result.note ?? result.reason) + " (the path does not exist on disk; rules are still evaluated)");
+  } else {
+    lines.push("note:   " + (result.note ?? result.reason));
+  }
   process.stdout.write(lines.join("\n") + "\n");
   return 0;
 }
@@ -212,7 +248,22 @@ function toExplainJson(result: ExplainResult): Record<string, unknown> {
 }
 
 async function runCheck(args: ParsedArgs, cwd: string, json: boolean): Promise<number> {
-  const report = await checkRepo(cwd, { strict: args.flags.has("strict") });
+  const report = await checkRepo(cwd, {
+    strict: args.flags.has("strict"),
+    verbose: args.flags.has("verbose"),
+  });
+
+  if (!report.isRepository) {
+    const message =
+      "not a git repository: " + report.root + " (check audits a git work tree; run git init first)";
+    if (json) {
+      process.stdout.write(
+        JSON.stringify({ root: report.root, isRepository: false, error: message }, null, 2) + "\n",
+      );
+    }
+    process.stderr.write("gid: " + message + "\n");
+    return 2;
+  }
 
   if (json) {
     process.stdout.write(
@@ -309,7 +360,7 @@ function renderIssue(issue: Issue): string {
 
 async function runList(args: ParsedArgs, cwd: string, json: boolean): Promise<number> {
   const root = await findRepoRoot(cwd);
-  const files = await collectIgnoreFiles(root, {});
+  const files = await collectIgnoreFiles(root, { global: args.flags.has("global") });
   const rules = flattenRules(files);
 
   const hits = new Map<string, number>();
@@ -399,12 +450,22 @@ async function runList(args: ParsedArgs, cwd: string, json: boolean): Promise<nu
   }
   lines.push("");
   lines.push("total: " + rules.length + " rule(s)");
+  lines.push("hits = files whose name matches the pattern, counted before later rules win; they are not the number of files this rule actually ignores.");
   process.stdout.write(lines.join("\n") + "\n");
   return 0;
 }
 
 async function runInit(args: ParsedArgs, cwd: string, json: boolean): Promise<number> {
-  const root = await findRepoRoot(cwd);
+  const root = await findRepoRootOrNull(cwd);
+  if (root === null) {
+    const message =
+      "not a git repository: " + path.resolve(cwd) + " (run git init first, or pass --cwd)";
+    if (json) {
+      process.stdout.write(JSON.stringify({ error: message }, null, 2) + "\n");
+    }
+    process.stderr.write("gid: " + message + "\n");
+    return 2;
+  }
   const target = ignoreFileTarget(root);
 
   if (!args.flags.has("force")) {

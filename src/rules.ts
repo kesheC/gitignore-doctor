@@ -21,6 +21,14 @@ export interface ParseOptions {
   baseDir?: string;
   /** First value used for the global evaluation order. */
   startOrder?: number;
+  /**
+   * Compile the matchers case-insensitively.
+   *
+   * Git decides this from `core.ignorecase`, which `git init` sets on
+   * case-insensitive filesystems (Windows, default macOS). It is off unless
+   * explicitly requested so the pure parser stays predictable.
+   */
+  ignoreCase?: boolean;
 }
 
 /** Remove unescaped trailing spaces, as git does. */
@@ -105,7 +113,7 @@ export function parseIgnoreFile(content: string, options: ParseOptions): IgnoreR
       sourceAbs,
       line: index + 1,
       baseDir,
-      regex: new RegExp(regexSource, ""),
+      regex: new RegExp(regexSource, options.ignoreCase === true ? "i" : ""),
       order: order++,
     });
   }

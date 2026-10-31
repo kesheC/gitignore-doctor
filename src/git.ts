@@ -23,6 +23,31 @@ export async function runGit(args: string[], cwd: string): Promise<string | null
   }
 }
 
+/** Read one git config value, or null when it is unset / git is unavailable. */
+export async function gitConfigValue(root: string, key: string): Promise<string | null> {
+  const out = await runGit(["config", "--get", key], root);
+  if (out === null) return null;
+  const value = out.trim();
+  return value === "" ? null : value;
+}
+
+/**
+ * Whether git compares paths case-insensitively in this repository.
+ *
+ * `git init` turns `core.ignorecase` on for case-insensitive filesystems
+ * (Windows, default macOS) but leaves it off on Linux, so the answer has to
+ * come from git itself. Without a repository (or without git) we fall back to
+ * the platform default, which is what `git init` would have chosen anyway.
+ */
+export async function isCaseInsensitive(
+  root: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  const configured = await gitConfigValue(root, "core.ignorecase");
+  if (configured !== null) return configured.toLowerCase() === "true";
+  return platform === "win32" || platform === "darwin";
+}
+
 /** True when the git CLI is installed and answers questions. */
 export async function isGitAvailable(cwd: string): Promise<boolean> {
   return (await runGit(["--version"], cwd)) !== null;
@@ -49,25 +74,43 @@ export async function isTracked(root: string, relativePath: string): Promise<boo
 }
 
 /**
- * Ask git for the verdict on a path. Used only for cross checking in tests and
- * for `gid list --verify`; the main implementation never relies on it.
+ * Ask git for the verdict on a path, or null when git could not answer.
+ *
+ * `check-ignore -q` is the only correct ground truth: with `-v` git also
+ * prints (and exits 0 for) a rule that merely *un-ignores* the path, so a
+ * negated rule would look like "ignored". `-q` exits 0 only when the path is
+ * actually excluded.
+ *
+ * Used for cross checking in tests; the main implementation never relies on it.
  */
 export async function gitCheckIgnore(root: string, relativePath: string): Promise<boolean | null> {
   try {
-    const out = await runGit(["check-ignore", "-v", "--no-index", "--", relativePath], root);
-    return out !== null && out.trim().length > 0;
-  } catch {
+    await execFileAsync("git", ["check-ignore", "-q", "--no-index", "--", relativePath], {
+      ...EXEC_OPTIONS,
+      cwd: root,
+    });
+    return true;
+  } catch (error) {
+    const code = (error as { code?: number }).code;
+    if (code === 1) return false;
     return null;
   }
 }
 
+/** The rule git says wins, as `source:line:pattern`, or null when not ignored. */
+export async function gitCheckIgnoreVerbose(root: string, relativePath: string): Promise<string | null> {
+  const out = await runGit(["check-ignore", "-v", "--no-index", "--", relativePath], root);
+  if (out === null) return null;
+  const line = out.split("\n")[0]?.trim() ?? "";
+  return line === "" ? null : line;
+}
+
 /** Resolve core.excludesFile, honouring a leading `~`. */
 export async function globalExcludesFile(root: string, home: string): Promise<string | null> {
-  const configured = await runGit(["config", "--get", "core.excludesFile"], root);
-  if (configured === null || configured.trim() === "") return null;
-  const value = configured.trim();
-  if (value.startsWith("~/") || value.startsWith("~\\")) {
-    return value.slice(2).split(/[\\/]/).reduce((acc, part) => acc + "/" + part, home);
+  const configured = await gitConfigValue(root, "core.excludesFile");
+  if (configured === null) return null;
+  if (configured.startsWith("~/") || configured.startsWith("~\\")) {
+    return configured.slice(2).split(/[\\/]/).reduce((acc, part) => acc + "/" + part, home);
   }
-  return value;
+  return configured;
 }

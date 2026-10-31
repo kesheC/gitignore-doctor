@@ -4,9 +4,9 @@
 import { readdir, stat } from "node:fs/promises";
 import * as path from "node:path";
 
-import { collectIgnoreFiles, flattenRules, findRepoRoot } from "./resolve.js";
+import { collectIgnoreFiles, flattenRules, findRepoRootOrNull } from "./resolve.js";
 import { matchPath, relativeWithin } from "./matcher.js";
-import { listTrackedFiles, isGitAvailable } from "./git.js";
+import { isCaseInsensitive, listTrackedFiles, isGitAvailable } from "./git.js";
 import type { CheckOptions, CheckReport, IgnoreRule, Issue, IssueKind } from "./types.js";
 
 /** Filenames / globs that should essentially never be committed. */
@@ -92,10 +92,12 @@ export async function checkRepo(
   cwd: string,
   options: CheckOptions = {},
 ): Promise<CheckReport> {
-  const root = await findRepoRoot(cwd);
+  const repoRoot = await findRepoRootOrNull(cwd);
+  const root = repoRoot ?? path.resolve(cwd);
   const maxEntries = options.maxEntries ?? 200_000;
+  const ignoreCase = await isCaseInsensitive(root);
 
-  const files = await collectIgnoreFiles(root, { gitInfoExclude: false });
+  const files = await collectIgnoreFiles(root, { gitInfoExclude: false, ignoreCase });
   const rules = flattenRules(files);
   const { entries, scanned } = await walkTree(root, maxEntries);
 
@@ -165,8 +167,31 @@ export async function checkRepo(
       path: null,
       rule,
       message:
-        rule.source + ":" + rule.line + ' "' + rule.raw + '" matches nothing in this repository',
-      advice: "delete the rule, or fix it if the path moved",
+        rule.source + ":" + rule.line + ' "' + rule.raw + '" matches no file right now',
+      advice: options.verbose
+        ? "delete the rule, or fix it if the path moved"
+        : "this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved",
+    });
+  }
+
+  // A "!" rule is useless when an earlier rule excludes one of its parent
+  // directories: git never descends into an excluded directory, so the
+  // negation is never consulted. That is the classic "my ! rule does not
+  // work" trap and it deserves a CONFLICT finding of its own.
+  for (const rule of rules) {
+    if (!rule.negated) continue;
+    const parent = parentDirectoryRule(rules, rule);
+    if (!parent) continue;
+    issues.push({
+      kind: "CONFLICT",
+      severity: 18,
+      path: null,
+      rule,
+      message:
+        rule.source + ":" + rule.line + ' "' + rule.raw + '" can never re-include anything, because ' +
+        parent.source + ":" + parent.line + ' "' + parent.raw + '" excludes its parent directory first',
+      advice:
+        "git never descends into an excluded directory; re-include the parent (for example '!" + parent.pattern + "/' or '!" + parent.pattern + "/**') before this line",
     });
   }
 
@@ -220,6 +245,8 @@ export async function checkRepo(
     scanned,
     ignoreFiles: files.map((file) => file.source),
     gitAvailable,
+    ignoreCase,
+    isRepository: repoRoot !== null,
     failed: blocking,
   };
 }
@@ -236,6 +263,34 @@ function isStrictlyBroader(later: IgnoreRule, earlier: IgnoreRule): boolean {
   if (/^\*\.[^.]+$/.test(later.pattern) && earlier.pattern.endsWith(later.pattern.slice(1))) return true;
   if (earlier.pattern.startsWith(later.pattern + "/")) return true;
   return false;
+}
+
+/**
+ * Find an earlier, non-negated rule that excludes a directory containing
+ * this negation, which makes the negation unreachable.
+ *
+ * Example: "build/" followed by "!build/keep/important.txt". The negation
+ * names a directory ("build") that an earlier rule already excluded whole,
+ * so git never looks inside it and the re-include never fires.
+ */
+function parentDirectoryRule(rules: IgnoreRule[], rule: IgnoreRule): IgnoreRule | null {
+  const parts = rule.pattern.split("/");
+  if (parts.length < 2) return null;
+  for (let i = 0; i < rules.length; i++) {
+    const candidate = rules[i];
+    if (!candidate || candidate === rule) continue;
+    if (candidate.order >= rule.order) break;
+    if (candidate.negated) continue;
+    for (let depth = 1; depth < parts.length; depth++) {
+      const prefix = parts.slice(0, depth).join("/");
+      if (candidate.pattern !== prefix && candidate.pattern !== "/" + prefix) continue;
+      if (candidate.dirOnly) return candidate;
+      // "logs" may be a file or a directory; only trust it when it is
+      // anchored or the negation lives under it.
+      if (candidate.anchored || candidate.pattern === prefix) return candidate;
+    }
+  }
+  return null;
 }
 
 /** Pick "a"/"an" so generated messages read like English. */
