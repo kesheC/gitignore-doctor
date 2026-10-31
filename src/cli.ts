@@ -5,8 +5,10 @@
  * This file only parses arguments and prints; every decision lives in the
  * library modules so it can be reused and tested without a process.
  */
+import { realpathSync } from "node:fs";
 import { readdir, stat, writeFile } from "node:fs/promises";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { explainPath, findRepoRoot, collectIgnoreFiles, flattenRules, normalizeTarget } from "./resolve.js";
 import { relativeWithin } from "./matcher.js";
@@ -15,7 +17,7 @@ import { generateIgnoreFile, ignoreFileTarget, listStacks } from "./init.js";
 import { matchPath } from "./matcher.js";
 import type { ExplainResult, Issue, IssueKind } from "./types.js";
 
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 
 const HELP = `gid - explain & audit .gitignore rules
 
@@ -442,7 +444,18 @@ async function runInit(args: ParsedArgs, cwd: string, json: boolean): Promise<nu
   return 0;
 }
 
-const isMain = process.argv[1] !== undefined && import.meta.url === new URL("file://" + path.resolve(process.argv[1])).href;
+// realpathSync on both sides: npm links the bin shim to this file, so
+// process.argv[1] is the symlink while import.meta.url is already the real
+// path. Comparing raw paths makes the CLI exit silently doing nothing.
+const isMain = (() => {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+})();
 
 if (isMain) {
   main(process.argv.slice(2)).then(
