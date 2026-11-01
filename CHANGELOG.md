@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-01
+
+### Fixed
+
+- **`.git/info/exclude` now anchors at the repository root.** It was parsed
+  with the file's own directory as the anchor, so every rule in it matched
+  nothing and `gid` disagreed with `git check-ignore` on the same tree.
+- **`core.ignorecase` is honoured.** On Windows and macOS a rule matched
+  case-sensitively while git matched case-insensitively, which also made
+  `check` report one file as both MISSING and DEAD.
+- **`--global` contributes rules again.** It passed an absolute path where a
+  repo-relative one was expected, so the global excludes file added nothing.
+- **`check` no longer tells you to delete defensive rules.** A rule that has
+  not matched yet is usually waiting for an accident, not dead; the advice now
+  says so, and `--verbose` restores the blunt wording for rules that really
+  did move.
+- **A negation under an excluded directory is a `CONFLICT`.** `explain` already
+  warned about it; `check` stayed silent.
+- **`check` and `init` exit 2 outside a git work tree** instead of printing
+  'No issues found' or writing a `.gitignore` next to nothing.
+- **Unknown and misspelled options exit 2** for every subcommand.
+- **The `--all` truncation wording matches the output.** Help claimed 'first 8
+  per kind' while the command printed eight findings followed by an 'and N
+  more' line; both the flag description and the README now describe what
+  happens, pinned by a test.
+
+### Changed
+
+- The `node` template in `init` covers `dist/`, `build/`, `coverage/`,
+  `*.tsbuildinfo` and `.eslintcache`.
+- The README demo, list and limits sections quote the output of the fixed
+  binary, and document exit code 2 plus the case-insensitivity and
+  global-excludes rules.
+
+### Quality
+
+- `tests/regressions.test.ts` pins the ignore behaviour against
+  `git check-ignore -q` as the oracle; against the previous tree, 9 of its 14
+  cases fail.
+
 ## [0.1.6] - 2026-11-01
 
 ### Fixed
