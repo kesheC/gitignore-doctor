@@ -266,6 +266,44 @@ describe("CLI exit codes (M3 M4 M6)", () => {
     expect(result.stderr).toContain("not a git repository");
   });
 
+  it("reports a pattern V8 refuses to compile instead of dying on it", async () => {
+    // V8 compiles a regular expression on first use, so a .gitignore line of
+    // 40 000 characters sailed through parsing and then threw "Regular
+    // expression too large" in the middle of the tree walk: exit 1, a raw
+    // stack message, and the 40 000 characters printed back at the reader.
+    const huge = "x".repeat(40_000);
+    const root = await repo({ ".gitignore": huge + "\n*.log\n", "app.log": "x\n" });
+
+    const check = runCli(["check", "--cwd", root], root);
+    expect(check.code).toBe(0);
+    expect(check.stdout).toContain("INVALID");
+    expect(check.stdout).toContain("cannot be used");
+    expect(check.stdout).toContain("(40000 characters)");
+    // The inline line must stay short, and the rule must not also be called DEAD.
+    expect(check.stdout).not.toContain(huge);
+    expect(check.stdout).not.toContain("matches no file right now");
+
+    const explain = runCli(["explain", "app.log", "--cwd", root], root);
+    expect(explain.code).toBe(0);
+    expect(explain.stdout).toContain("status: ignored");
+    expect(explain.stdout).not.toContain(huge);
+
+    const list = runCli(["list", "--cwd", root, "--json"], root);
+    expect(list.code).toBe(0);
+    const rules = JSON.parse(list.stdout) as Array<{ line: number; patternError: string | null }>;
+    const broken = rules.find((rule) => rule.line === 1);
+    expect(broken?.patternError).toContain("characters long");
+  });
+
+  it("fails a strict run when a pattern cannot be compiled", async () => {
+    const root = await repo({ ".gitignore": "x".repeat(5000) + "\n" });
+    const loose = runCli(["check", "--cwd", root], root);
+    expect(loose.code).toBe(0);
+    expect(loose.stdout).toContain("INVALID");
+    const strict = runCli(["check", "--cwd", root, "--strict"], root);
+    expect(strict.code).toBe(1);
+  });
+
   it("treats everything after -- as a path, so a name that starts with a dash can be explained", async () => {
     const root = await repo({ ".gitignore": "--weird-name\n" });
     const result = runCli(["explain", "--", "--weird-name"], root);

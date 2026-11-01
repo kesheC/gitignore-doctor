@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A pattern V8 refuses to compile is a finding, not a crash.** One
+  `.gitignore` line of 40,000 characters sailed through parsing and then threw
+  `Invalid regular expression: ... Regular expression too large` during the tree
+  walk: `gid check`, `gid explain` and `gid list` all exited 1 with the whole
+  pattern printed back at the reader. V8 compiles a regular expression lazily, so
+  the failure only shows up on first use; the matcher is now compiled and test-run
+  while the rule is parsed, and a pattern that cannot be used becomes an
+  `INVALID` finding naming the line, the shortened pattern and the reason. Such a
+  rule no longer also reports as `DEAD`, and `--strict` fails on it.
+- **Rule text in findings and in `list` is abbreviated.** A pathological line is
+  quoted as `xxxx... (40000 characters)` instead of being pasted into every
+  DEAD, CONFLICT and INVALID message.
+
 ## [0.1.10] - 2026-11-01
 
 ### Fixed

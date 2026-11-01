@@ -22,6 +22,15 @@ export interface IgnoreRule {
   baseDir: string;
   /** Compiled matcher for the pattern, already anchored with ^ and $. */
   regex: RegExp;
+  /**
+   * Why the pattern could not be compiled, or null when it could.
+   *
+   * A rule with a reason here still exists (so line numbers and reports stay
+   * accurate) but its matcher never matches. V8 refuses patterns past a size
+   * limit and only throws on first use, so without this field one absurd
+   * .gitignore line took the whole command down with a raw stack message.
+   */
+  patternError: string | null;
   /** Global evaluation order: shallower files first, then line order. */
   order: number;
 }
@@ -87,7 +96,7 @@ export interface ExplainResult extends MatchResult {
   whitelistedBy: IgnoreRule | null;
 }
 
-export type IssueKind = "LEAK" | "MISSING" | "DEAD" | "CONFLICT";
+export type IssueKind = "LEAK" | "MISSING" | "INVALID" | "DEAD" | "CONFLICT";
 
 /** One finding produced by checkRepo. */
 export interface Issue {

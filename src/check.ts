@@ -1,9 +1,10 @@
 /**
- * Repository audit: LEAK / MISSING / DEAD / CONFLICT.
+ * Repository audit: LEAK / MISSING / INVALID / DEAD / CONFLICT.
  */
 import { readdir, stat } from "node:fs/promises";
 import * as path from "node:path";
 
+import { abbreviatePattern } from "./rules.js";
 import { collectIgnoreFiles, flattenRules, findRepoRootOrNull } from "./resolve.js";
 import { matchPath, relativeWithin } from "./matcher.js";
 import { isCaseInsensitive, listTrackedFiles, isGitAvailable } from "./git.js";
@@ -144,6 +145,25 @@ export async function checkRepo(
     });
   }
 
+  // --- INVALID: a rule whose pattern cannot be compiled ---------------------
+  // V8 compiles a regular expression on first use, so an unusable pattern used
+  // to escape parsing and blow up mid-walk. `parseIgnoreFile` now records the
+  // reason and hands back a matcher that matches nothing; saying so here turns
+  // a silent "this rule does nothing" into a finding with a line number.
+  for (const rule of rules) {
+    if (rule.patternError === null) continue;
+    issues.push({
+      kind: "INVALID",
+      severity: 30,
+      path: null,
+      rule,
+      message:
+        rule.source + ":" + rule.line + ' "' + abbreviatePattern(rule.raw) + '" cannot be used: ' + rule.patternError,
+      advice:
+        "shorten the line or split it into several patterns; a rule that cannot be compiled matches nothing",
+    });
+  }
+
   // --- DEAD / CONFLICT ------------------------------------------------------
   const perRuleHits = new Map<IgnoreRule, number>();
   for (const rule of rules) perRuleHits.set(rule, 0);
@@ -159,6 +179,9 @@ export async function checkRepo(
   }
 
   for (const rule of rules) {
+    // A rule that cannot compile already has an INVALID finding; repeating it
+    // here as DEAD would say the same thing twice with a worse explanation.
+    if (rule.patternError !== null) continue;
     const hits = perRuleHits.get(rule) ?? 0;
     if (hits > 0) continue;
     issues.push({
@@ -167,7 +190,7 @@ export async function checkRepo(
       path: null,
       rule,
       message:
-        rule.source + ":" + rule.line + ' "' + rule.raw + '" matches no file right now',
+        rule.source + ":" + rule.line + ' "' + abbreviatePattern(rule.raw) + '" matches no file right now',
       advice: options.verbose
         ? "delete the rule, or fix it if the path moved"
         : "this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved",
@@ -188,8 +211,9 @@ export async function checkRepo(
       path: null,
       rule,
       message:
-        rule.source + ":" + rule.line + ' "' + rule.raw + '" can never re-include anything, because ' +
-        parent.source + ":" + parent.line + ' "' + parent.raw + '" excludes its parent directory first',
+        rule.source + ":" + rule.line + ' "' + abbreviatePattern(rule.raw) +
+        '" can never re-include anything, because ' + parent.source + ":" + parent.line + ' "' +
+        abbreviatePattern(parent.raw) + '" excludes its parent directory first',
       advice:
         "git never descends into an excluded directory; re-include the parent (for example '!" + parent.pattern + "/' or '!" + parent.pattern + "/**') before this line",
     });
@@ -209,8 +233,9 @@ export async function checkRepo(
         path: null,
         rule: earlier,
         message:
-          earlier.source + ":" + earlier.line + ' "' + earlier.raw + '" is shadowed by ' +
-          later.source + ":" + later.line + ' "' + later.raw + '"',
+          earlier.source + ":" + earlier.line + ' "' + abbreviatePattern(earlier.raw) +
+          '" is shadowed by ' + later.source + ":" + later.line + ' "' +
+          abbreviatePattern(later.raw) + '"',
         advice: "later rules win, so the earlier line can never decide anything; remove it",
       });
       break;
@@ -219,7 +244,7 @@ export async function checkRepo(
 
   // Sort for humans: dangerous findings first, then a stable per-kind order
   // (paths alphabetically for files, numeric line numbers for rules).
-  const KIND_ORDER: Record<IssueKind, number> = { LEAK: 0, MISSING: 1, CONFLICT: 2, DEAD: 3 };
+  const KIND_ORDER: Record<IssueKind, number> = { LEAK: 0, MISSING: 1, INVALID: 2, CONFLICT: 3, DEAD: 4 };
   issues.sort((a, b) => {
     if (a.kind !== b.kind) return KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
     if (a.kind === "LEAK" || a.kind === "MISSING") {
@@ -231,9 +256,11 @@ export async function checkRepo(
     return (a.rule?.line ?? 0) - (b.rule?.line ?? 0);
   });
 
-  const counts: Record<IssueKind, number> = { LEAK: 0, MISSING: 0, DEAD: 0, CONFLICT: 0 };
+  const counts: Record<IssueKind, number> = { LEAK: 0, MISSING: 0, INVALID: 0, CONFLICT: 0, DEAD: 0 };
   for (const issue of issues) counts[issue.kind]++;
 
+  // An unusable pattern is a broken ignore file, not a style nit; it stays out
+  // of the default gate (which is about leaking secrets) but blocks --strict.
   const blocking = options.strict
     ? issues.length > 0
     : counts.LEAK + counts.MISSING > 0;

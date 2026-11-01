@@ -20,6 +20,7 @@ import {
 } from "./resolve.js";
 import { relativeWithin } from "./matcher.js";
 import { checkRepo } from "./check.js";
+import { abbreviatePattern } from "./rules.js";
 import { generateIgnoreFile, ignoreFileTarget, listStacks } from "./init.js";
 import { matchPath } from "./matcher.js";
 import type { ExplainResult, Issue, IssueKind } from "./types.js";
@@ -243,7 +244,10 @@ async function runExplain(args: ParsedArgs, cwd: string, json: boolean): Promise
       : result.isDir
         ? "on this directory"
         : "on this file";
-    lines.push("rule:   " + rule.source + ":" + rule.line + "  \"" + rule.raw + "\"  (" + shape + " " + where + ")");
+    lines.push("rule:   " + rule.source + ":" + rule.line + "  \"" + abbreviatePattern(rule.raw) + "\"  (" + shape + " " + where + ")");
+    if (rule.patternError !== null) {
+      lines.push("warn:   this pattern cannot be compiled (" + rule.patternError + "), so it matches nothing");
+    }
   } else {
     lines.push("rule:   (none)");
   }
@@ -280,6 +284,7 @@ function toExplainJson(result: ExplainResult): Record<string, unknown> {
     source: result.rule ? result.rule.source : null,
     line: result.rule ? result.rule.line : null,
     pattern: result.rule ? result.rule.pattern : null,
+    patternError: result.rule ? result.rule.patternError : null,
     reason: result.reason,
     whitelistedBy: result.whitelistedBy
       ? {
@@ -369,7 +374,7 @@ async function runCheck(args: ParsedArgs, cwd: string, json: boolean): Promise<n
       if (count > limit) continue;
       lines.push("  " + renderIssue(issue));
     }
-    for (const kind of ["LEAK", "MISSING", "CONFLICT", "DEAD"] as IssueKind[]) {
+    for (const kind of ["LEAK", "MISSING", "INVALID", "CONFLICT", "DEAD"] as IssueKind[]) {
       const hidden = report.counts[kind] - Math.min(report.counts[kind], limit);
       if (hidden > 0) lines.push("  ... and " + hidden + " more " + kind + " finding(s); use --all to see them");
     }
@@ -377,7 +382,8 @@ async function runCheck(args: ParsedArgs, cwd: string, json: boolean): Promise<n
     const blocking = report.counts.LEAK + report.counts.MISSING;
     lines.push(
       "summary: " + report.counts.LEAK + " leak, " + report.counts.MISSING + " missing, " +
-        report.counts.DEAD + " dead, " + report.counts.CONFLICT + " conflict",
+        report.counts.INVALID + " invalid, " + report.counts.DEAD + " dead, " +
+        report.counts.CONFLICT + " conflict",
     );
     lines.push(
       report.failed
@@ -396,10 +402,12 @@ function sectionTitle(kind: IssueKind): string {
       return "LEAK - tracked despite being ignored";
     case "MISSING":
       return "MISSING - should be ignored but is not";
+    case "INVALID":
+      return "INVALID - rules that cannot be compiled";
     case "DEAD":
       return "DEAD - rules that match nothing";
     case "CONFLICT":
-      return "CONFLICT - rules shadowed by later rules";
+      return "CONFLICT - rules shadowed by later rules or parent directories";
   }
 }
 
@@ -463,6 +471,7 @@ async function runList(args: ParsedArgs, cwd: string, json: boolean): Promise<nu
           negated: rule.negated,
           dirOnly: rule.dirOnly,
           anchored: rule.anchored,
+          patternError: rule.patternError,
           hits: hits.get(rule.source + ":" + rule.line) ?? 0,
         })),
         null,
@@ -488,8 +497,12 @@ async function runList(args: ParsedArgs, cwd: string, json: boolean): Promise<nu
       lines.push(currentSource);
     }
     const count = hits.get(rule.source + ":" + rule.line) ?? 0;
-    const marker = count === 0 ? "  (matches 0)" : "";
-    lines.push("  " + String(rule.line).padStart(4) + "  " + rule.raw.padEnd(34) + String(count).padStart(6) + marker);
+    const marker =
+      rule.patternError !== null ? "  (invalid pattern: matches nothing)" : count === 0 ? "  (matches 0)" : "";
+    lines.push(
+      "  " + String(rule.line).padStart(4) + "  " + abbreviatePattern(rule.raw, 60).padEnd(34) +
+        String(count).padStart(6) + marker,
+    );
     if (args.flags.has("why")) {
       const bits = [rule.negated ? "re-include" : "ignore"];
       if (rule.dirOnly) bits.push("directories only");

@@ -12,6 +12,43 @@
 import type { IgnoreRule } from "./types.js";
 import { globToRegExpSource } from "./matcher.js";
 
+/**
+ * Patterns longer than this are not compiled.
+ *
+ * V8 checks the size of a regular expression lazily, on first use, and refuses
+ * sources past 2^15 characters with "Regular expression too large". A rule
+ * that big cannot match anything anyone wrote on purpose, and letting it reach
+ * `RegExp.test` took the entire command down, so it is recorded as invalid
+ * instead. 4096 is far above any real .gitignore line and far below the limit.
+ */
+const MAX_PATTERN_LENGTH = 4096;
+
+/** Build the matcher for a rule, downgrading an unusable pattern to "matches nothing". */
+function compileMatcher(
+  source: string,
+  ignoreCase: boolean,
+): { regex: RegExp; patternError: string | null } {
+  try {
+    const regex = new RegExp(source, ignoreCase ? "i" : "");
+    // V8 compiles lazily: a source it will refuse only throws when first used.
+    // One throwaway test here turns that deferred failure into an answer we can
+    // record, instead of a crash somewhere far away during the tree walk.
+    regex.test("");
+    return { regex, patternError: null };
+  } catch (error) {
+    return {
+      regex: /(?!)/,
+      patternError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** Shorten a pattern for a message; a 40 000 character line belongs in no report. */
+export function abbreviatePattern(pattern: string, limit = 60): string {
+  if (pattern.length <= limit) return pattern;
+  return pattern.slice(0, limit) + "... (" + pattern.length + " characters)";
+}
+
 export interface ParseOptions {
   /** Display path of the .gitignore file, POSIX, relative to the repo root. */
   source: string;
@@ -102,7 +139,26 @@ export function parseIgnoreFile(content: string, options: ParseOptions): IgnoreR
     }
     if (body === "") continue;
 
-    const regexSource = globToRegExpSource(body, anchored);
+    if (body.length > MAX_PATTERN_LENGTH) {
+      rules.push({
+        raw: line,
+        pattern: body,
+        negated,
+        dirOnly,
+        anchored,
+        source: options.source,
+        sourceAbs,
+        line: index + 1,
+        baseDir,
+        regex: /(?!)/,
+        patternError:
+          "the pattern is " + body.length + " characters long; the limit is " + MAX_PATTERN_LENGTH,
+        order: order++,
+      });
+      continue;
+    }
+
+    const compiled = compileMatcher(globToRegExpSource(body, anchored), options.ignoreCase === true);
     rules.push({
       raw: line,
       pattern: body,
@@ -113,7 +169,8 @@ export function parseIgnoreFile(content: string, options: ParseOptions): IgnoreR
       sourceAbs,
       line: index + 1,
       baseDir,
-      regex: new RegExp(regexSource, options.ignoreCase === true ? "i" : ""),
+      regex: compiled.regex,
+      patternError: compiled.patternError,
       order: order++,
     });
   }

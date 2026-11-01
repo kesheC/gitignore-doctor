@@ -115,7 +115,7 @@ DEAD - rules that match nothing (39)
         fix: this is expected for defensive rules (files that only exist after an accident); keep it unless the path really moved
   ... and 31 more DEAD finding(s); use --all to see them
 
-summary: 1 leak, 1 missing, 39 dead, 0 conflict
+summary: 1 leak, 1 missing, 0 invalid, 39 dead, 0 conflict
 result:  FAIL (2 blocking)
 ```
 
@@ -182,7 +182,7 @@ $ gid explain .env --json
 
 ### `gid check`
 
-Four kinds of finding, each with a concrete fix:
+Five kinds of finding, each with a concrete fix:
 
 | Kind | Meaning |
 | --- | --- |
@@ -190,6 +190,7 @@ Four kinds of finding, each with a concrete fix:
 | **MISSING** | Untracked, not ignored, but obviously should be (`.env`, `*.log`, `node_modules/`, `.DS_Store`, ...). |
 | **DEAD** | A rule that matches zero files in this repository — usually stale copy-paste. |
 | **CONFLICT** | A rule fully shadowed by a later rule, so it can never decide anything. |
+| **INVALID** | A pattern the regex engine refuses to compile (one line thousands of characters long). It matches nothing, and it used to crash the run. |
 
 Exit codes: `0` clean, `1` when there is a LEAK or MISSING (or any finding
 with `--strict`), `2` on a usage error — including running it outside a git work
@@ -218,7 +219,7 @@ path:   --weird-name
 ```bash
 gid check             # human readable, first 8 findings per kind
 gid check --all       # every finding (without it: 8 per kind, then "and N more")
-gid check --strict    # DEAD and CONFLICT also fail the build
+gid check --strict    # INVALID, DEAD and CONFLICT also fail the build
 gid check --verbose   # per-finding detail, e.g. the blunt advice for DEAD rules
 gid check --json      # full machine-readable report
 ```
@@ -286,7 +287,7 @@ An existing `.gitignore` is never overwritten unless you pass `--force`.
    one level the last matching rule wins. That is the whole "why doesn't my `!`
    rule work" mystery.
 4. `checkRepo` reuses the same matcher over the working tree plus `git ls-files` to
-   classify findings into LEAK / MISSING / DEAD / CONFLICT.
+   classify findings into LEAK / MISSING / INVALID / DEAD / CONFLICT.
 
 Gitignore semantics are implemented from scratch (`**`, character classes, escapes,
 trailing-space rules); `git` is only used to list tracked files, never as the matcher.
@@ -307,7 +308,7 @@ const verdict = await explainPath("dist/bundle.js", { cwd: process.cwd() });
 // verdict.rule?.source, verdict.rule?.line, verdict.reason, verdict.note
 
 const report = await checkRepo(process.cwd(), { strict: false });
-// report.counts -> { LEAK, MISSING, DEAD, CONFLICT }, report.failed -> boolean
+// report.counts -> { LEAK, MISSING, INVALID, DEAD, CONFLICT }, report.failed -> boolean
 ```
 
 Exported: `parseIgnoreFile`, `matchPath`, `ruleMatches`, `explainPath`, `checkRepo`,
@@ -333,6 +334,12 @@ Exported: `parseIgnoreFile`, `matchPath`, `ruleMatches`, `explainPath`, `checkRe
   ask for `--strict`.
 - **CONFLICT is a heuristic too** — it only reports rules that are *fully* shadowed by
   an identical-or-broader later rule in the same file.
+- **INVALID means the pattern could not be compiled at all.** One absurd line (tens of
+  thousands of characters) exceeds the regex engine's limit, and V8 only reports that
+  on first use — which used to happen in the middle of the tree walk, taking the whole
+  command down with a raw `SyntaxError`. Such a rule is now compiled (and test-run)
+  while the file is parsed, so the failure becomes a finding with a line number instead
+  of a crash. It matches nothing, so fix or delete the line.
 - **It does not rewrite your history.** If a secret is in a commit, `gid` tells you to
   `git rm --cached`; rotating the credential and rewriting history is on you.
 - **Not a formatter.** No sorting, no whitespace opinions.
@@ -413,7 +420,7 @@ node demo/make-fixture.mjs
 
 ```text
 $ gid check
-summary: 1 leak, 1 missing, 39 dead, 0 conflict
+summary: 1 leak, 1 missing, 0 invalid, 39 dead, 0 conflict
 result:  FAIL (2 blocking)
 ```
 
@@ -444,7 +451,7 @@ note:   the parent directory 'node_modules' is excluded, so git never looks insi
 
 ### `gid check`
 
-四类问题，每条都给出可执行的修复建议：
+五类问题，每条都给出可执行的修复建议：
 
 | 类型 | 含义 |
 | --- | --- |
@@ -452,6 +459,7 @@ note:   the parent directory 'node_modules' is excluded, so git never looks insi
 | **MISSING** | 未跟踪、也没被忽略，但显然应该忽略（`.env`、`*.log`、`node_modules/`、`.DS_Store` 等）。 |
 | **DEAD** | 这条规则在本仓库里匹配 0 个文件，通常是抄来忘了删的。 |
 | **CONFLICT** | 规则被后面更宽的规则完全遮蔽，永远轮不到它生效。 |
+| **INVALID** | 正则引擎拒绝编译的模式（单行几千个字符）。它匹配不到任何文件，而且以前会让整条命令崩掉。 |
 
 退出码：`0` 干净，`1` 表示存在 LEAK 或 MISSING（`--strict` 下任何问题都为 `1`），
 `2` 表示用法错误 —— 包括在非 git 工作区里运行：这种情况下 `check` 会拒绝假装干净。
@@ -477,7 +485,7 @@ path:   --weird-name
 ```bash
 gid check             # 人类可读，每类最多 8 条
 gid check --all       # 全部列出（不加时每类打印 8 条，然后一行 "and N more"）
-gid check --strict    # DEAD / CONFLICT 也算失败
+gid check --strict    # INVALID / DEAD / CONFLICT 也算失败
 gid check --verbose   # 每条问题给出更直白的建议（例如 DEAD 规则）
 gid check --json      # 完整机器可读报告
 ```
@@ -523,7 +531,7 @@ vscode。已存在的 `.gitignore` 不会被覆盖，除非加 `--force`。
    切被隐藏，后面写什么 `!` 都没用。同一层内最后匹配的规则获胜。这正是「我的 `!`
    为什么不起作用」的全部答案。
 4. `checkRepo` 用同一个匹配器扫工作区，配合 `git ls-files` 把问题分成
-   LEAK / MISSING / DEAD / CONFLICT。
+   LEAK / MISSING / INVALID / DEAD / CONFLICT。
 
 gitignore 语义是自行实现的（`**`、字符类、转义、尾随空格规则）；`git` 只用来列出
 已跟踪文件，从不作为匹配引擎。
@@ -548,6 +556,10 @@ CLI 只是纯库外面的一层壳。`src/index.ts` 里没有任何 `process.arg
 - **DEAD 是启发式判断。** `*.pyc` 现在匹配不到，只说明此刻没有 `.pyc`，不代表这条
   规则没用。不加 `--strict` 时 `check` 不会因 DEAD 失败。
 - **CONFLICT 也是启发式** —— 只报告被同文件内更宽规则**完全**遮蔽的规则。
+- **INVALID 表示这条模式根本编译不出来。** 单行几万个字符会超过正则引擎的上限，而 V8
+  只在第一次使用时才报错 —— 也就是扫目录扫到一半，整条命令带着原始 `SyntaxError` 挂掉。
+  现在改为在解析文件时就把正则编译一次并试跑一次，于是失败变成一条带行号的 finding，
+  而不是崩溃。它匹配不到任何文件，请改写或删掉那一行。
 - **它不改写你的历史。** 密钥已经进了 commit，`gid` 只能告诉你 `git rm --cached`；
   轮换凭据、重写历史得你自己来。
 - **它不是格式化工具。** 不排序、不对空白发表意见。
