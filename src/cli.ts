@@ -24,7 +24,7 @@ import { generateIgnoreFile, ignoreFileTarget, listStacks } from "./init.js";
 import { matchPath } from "./matcher.js";
 import type { ExplainResult, Issue, IssueKind } from "./types.js";
 
-const VERSION = "0.1.9";
+const VERSION = "0.1.10";
 
 const HELP = `gid - explain & audit .gitignore rules
 
