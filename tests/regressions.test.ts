@@ -336,3 +336,48 @@ describe("CLI exit codes (M3 M4 M6)", () => {
     expect(result.stdout).toContain("ignored");
   });
 });
+
+describe("--json failure documents", () => {
+  const CLI = path.resolve("dist/cli.js");
+
+  function runCli(args: string[], cwd: string): { code: number; stdout: string; stderr: string } {
+    try {
+      const stdout = execFileSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", stdio: "pipe" });
+      return { code: 0, stdout, stderr: "" };
+    } catch (error) {
+      const failure = error as { status?: number; stdout?: string; stderr?: string };
+      return { code: failure.status ?? 1, stdout: failure.stdout ?? "", stderr: failure.stderr ?? "" };
+    }
+  }
+
+  // Three failure paths used to answer differently: a bare string under "error"
+  // for a bad --cwd, nothing at all for a bad option, and a message about the
+  // option when the command itself was the typo. One shape now serves all of
+  // them, and it matches the other tools in this set.
+  it("answers a --json caller with a document on every failure path", async () => {
+    const root = await repo({ ".gitignore": "*.log\n" });
+    const missing = path.join(root, "no-such-subdir");
+    const cases: [string[], string][] = [
+      [["check", "--json", "--cwd", missing], "no such directory"],
+      [["check", "--json", "--bogus"], "unknown option for 'gid check': --bogus"],
+      [["check", "--json", "--version"], "--version is not supported"],
+      [["nosuchcommand", "--json"], "unknown command 'nosuchcommand'"],
+    ];
+    for (const [args, expected] of cases) {
+      const result = runCli(args, root);
+      expect(result.code, args.join(" ")).toBe(2);
+      const parsed = JSON.parse(result.stdout) as { error: { message: string; exitCode: number } };
+      expect(parsed.error.message, args.join(" ")).toContain(expected);
+      expect(parsed.error.exitCode, args.join(" ")).toBe(2);
+      expect(result.stderr, args.join(" ")).toContain("gid: ");
+    }
+  });
+
+  it("keeps stdout empty on failure when --json was not asked for", async () => {
+    const root = await repo({ ".gitignore": "*.log\n" });
+    const result = runCli(["check", "--cwd", path.join(root, "no-such-subdir")], root);
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("no such directory");
+  });
+});

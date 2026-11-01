@@ -175,12 +175,57 @@ function assertKnownOptions(command: string, args: ParsedArgs): void {
   }
 }
 
+/**
+ * Whether the line asks for machine output, judged from the raw tokens.
+ *
+ * The failure paths need this before a command has been parsed: a bad option,
+ * a bad --cwd and an unknown command all happen before the switch, and a
+ * caller that passed --json still asked for a document.
+ */
+function wantsJson(argv: string[]): boolean {
+  for (const token of argv) {
+    if (token === "--") break;
+    if (token === "--json") return true;
+    if (token.startsWith("--json=")) return token.slice("--json=".length) !== "false";
+  }
+  return false;
+}
+
+/**
+ * Report one failure twice: the sentence a person reads on stderr and the
+ * document a wrapper parses on stdout.
+ *
+ * `gid check --json --cwd /missing` used to answer with a bare string under
+ * "error" on one path and with nothing at all on the others, so a script could
+ * not read every failure the same way. The shape now matches apidiff,
+ * envpulse, jsonl-beaver and repropack: {"error":{"message":...,"exitCode":n}}.
+ */
+function reportFailure(message: string, exitCode: number, wantJson: boolean): number {
+  if (wantJson) {
+    process.stdout.write(JSON.stringify({ error: { message, exitCode } }, null, 2) + "\n");
+  }
+  process.stderr.write("gid: " + message + "\n");
+  return exitCode;
+}
+
 async function main(argv: string[]): Promise<number> {
+  const wantJson = wantsJson(argv);
   let args: ParsedArgs;
   try {
     args = parseArgs(argv);
   } catch (error) {
-    process.stderr.write("gid: " + (error as Error).message + "\n");
+    return reportFailure((error as Error).message, 2, wantJson);
+  }
+
+  // An unknown command is answered before its options. `gid nosuchcommand
+  // --json` used to come back as "unknown option for 'gid': --json", blaming
+  // the flag for a command that does not exist at all.
+  if (args.command !== "" && !Object.hasOwn(COMMAND_OPTIONS, args.command)) {
+    const message = "unknown command '" + args.command + "'";
+    if (wantJson) {
+      process.stdout.write(JSON.stringify({ error: { message, exitCode: 2 } }, null, 2) + "\n");
+    }
+    process.stderr.write("gid: " + message + "\n\n" + HELP);
     return 2;
   }
 
@@ -191,18 +236,18 @@ async function main(argv: string[]): Promise<number> {
   try {
     assertKnownOptions(args.command, args);
   } catch (error) {
-    process.stderr.write("gid: " + (error as Error).message + "\n");
-    return 2;
+    return reportFailure((error as Error).message, 2, wantJson);
   }
 
   // --version is checked before the help fallback, otherwise a bare
   // "gid --version" (no subcommand) would be treated as a usage error.
   if (args.flags.has("version")) {
     if (args.command !== "") {
-      process.stderr.write(
-        "gid: --version is not supported by 'gid " + args.command + "'; it applies to \"gid --version\" on its own\n",
+      return reportFailure(
+        "--version is not supported by 'gid " + args.command + "'; it applies to \"gid --version\" on its own",
+        2,
+        wantJson,
       );
-      return 2;
     }
     process.stdout.write(VERSION + "\n");
     return 0;
@@ -220,9 +265,7 @@ async function main(argv: string[]): Promise<number> {
   // path. `list` was worse: it printed "No ignore rules found" and exited 0.
   const cwdProblem = await checkDirectory(cwd);
   if (cwdProblem !== null) {
-    if (json) process.stdout.write(JSON.stringify({ error: cwdProblem }, null, 2) + "\n");
-    process.stderr.write("gid: " + cwdProblem + "\n");
-    return 2;
+    return reportFailure(cwdProblem, 2, wantJson);
   }
 
   try {
@@ -240,12 +283,8 @@ async function main(argv: string[]): Promise<number> {
         return 2;
     }
   } catch (error) {
-    if (error instanceof UsageError) {
-      process.stderr.write("gid: " + error.message + "\n");
-      return 2;
-    }
-    process.stderr.write("gid: " + (error as Error).message + "\n");
-    return 1;
+    if (error instanceof UsageError) return reportFailure(error.message, 2, wantJson);
+    return reportFailure((error as Error).message, 1, wantJson);
   }
 }
 

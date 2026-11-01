@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   --version` used to print the version and exit 0; it now exits 2 with
   `--version is not supported by 'gid check'; it applies to "gid --version" on its
   own`, which is what the other commands in this family say.
+- **A failure is a document too, not just a sentence.** `gid check --json --cwd
+  /missing` answered `{"error": "no such directory: ..."}`, every other failure
+  path wrote nothing to stdout at all, and `gid nosuchcommand --json` blamed
+  `--json` instead of the command. Every failure path now emits
+  `{"error":{"message":...,"exitCode":n}}`, the same shape as the rest of this
+  set, and an unknown command is answered before its options. Without `--json`
+  stdout stays empty.
 
 ## [0.1.10] - 2026-11-01
 

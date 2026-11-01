@@ -208,6 +208,23 @@ gid: not a directory: /home/you/package.json
 Only a real directory can be "not a git repository"; saying that about a path
 that does not exist sends you looking at git when the path is the problem.
 
+With `--json` on the line, every failure is a document on stdout instead of a
+silence, so a wrapper can read the reason the same way it reads a report:
+
+```text
+$ gid check --json --cwd ./no-such-dir; echo "exit=$?"
+{
+  "error": {
+    "message": "no such directory: /home/you/no-such-dir",
+    "exitCode": 2
+  }
+}
+exit=2
+```
+
+The `gid: ...` sentence still goes to stderr, and stdout stays empty when
+`--json` was not asked for.
+
 `--help` and `--version` are the only flags that are not scoped to a command,
 and they do not buy a misspelled flag a free pass. Options are validated before
 either of them runs, so a typo is still a typo:
@@ -493,6 +510,8 @@ gid: not a directory: /home/you/package.json
 
 只有真实存在的目录才谈得上「不是 git 仓库」；对一个根本不存在的路径这么说，会让
 读者去查 git，而真正的问题在路径本身。
+
+行上有 `--json` 时，失败也会是一个文档而不是一片空白，脚本读原因和读报告用同一套解析：`{"error":{"message":"no such directory: /home/you/no-such-dir","exitCode":2}}`，退出码照旧是 `2`；`gid: ...` 那句话仍然只写 stderr，不带 `--json` 时 stdout 一个字节都不写。
 
 `--help` 和 `--version` 是仅有的两个不归属于某个子命令的选项，但它们也不会替
 拼错的选项兜底。选项校验排在它们之前，所以拼错依旧是拼错：
