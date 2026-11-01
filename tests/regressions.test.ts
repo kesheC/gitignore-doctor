@@ -211,6 +211,22 @@ describe("CLI exit codes (M3 M4 M6)", () => {
     await expect(access(path.join(root, ".gitignore"))).rejects.toThrow();
   });
 
+  // --flag=value is the spelling half the world types first; the parser only
+  // knew "--flag value", so "--cwd=." was reported as unknown.
+  it("accepts the --flag=value spelling", async () => {
+    const root = await repo({ ".gitignore": "*.log\n" });
+    const result = runCli(["list", "--cwd=.", "--json"], root);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("*.log");
+  });
+
+  it("refuses a value on a flag that has none", async () => {
+    const root = await repo({ ".gitignore": "*.log\n" });
+    const result = runCli(["list", "--why=1"], root);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("--why does not take a value");
+  });
+
   it("exits 2 on a misspelled option instead of silently ignoring it", async () => {
     const root = await repo({ ".gitignore": "*.log\n" });
     for (const args of [["check", "--stict"], ["check", "--unknown"], ["list", "--nope"]]) {

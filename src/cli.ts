@@ -104,13 +104,23 @@ export function parseArgs(argv: string[]): ParsedArgs {
       break;
     }
     if (arg.startsWith("--")) {
-      const name = arg.slice(2);
+      // --flag=value is the spelling everyone reaches for; splitting it here
+      // keeps "unknown option for 'gid list': --cwd=." from being the answer.
+      const body = arg.slice(2);
+      const eq = body.indexOf("=");
+      const name = eq >= 0 ? body.slice(0, eq) : body;
+      const inline = eq >= 0 ? body.slice(eq + 1) : undefined;
       if (takesValue.has(name)) {
+        if (inline !== undefined) {
+          values.set(name, inline);
+          continue;
+        }
         const next = argv[i + 1];
         if (next === undefined) throw new UsageError("--" + name + " needs a value");
         values.set(name, next);
         i++;
       } else {
+        if (inline !== undefined) throw new UsageError("--" + name + " does not take a value");
         flags.add(name);
       }
       continue;

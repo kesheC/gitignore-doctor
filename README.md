@@ -123,6 +123,10 @@ Exit code was `1`, so this doubles as a pre-commit or CI gate.
 
 ## Usage
 
+Every option takes its value either as the next word or after an equals sign:
+`--cwd=.` and `--cwd .` are the same. `--` on its own ends the
+options, so a path that starts with a dash can still be named.
+
 ### `gid explain <path>`
 
 Why is this path ignored? Which file, which line, which rule won?
@@ -416,6 +420,9 @@ result:  FAIL (2 blocking)
 退出码为 `1`，可以直接当 pre-commit 或 CI 门禁使用。
 
 ## 用法
+
+每个选项的取值都可以写成下一个词，也可以紧跟在等号后面：`--cwd=.` 与
+`--cwd .` 等价。单独一个 `--` 表示选项到此为止，以短横线开头的路径也能传进去。
 
 ### `gid explain <path>`
 

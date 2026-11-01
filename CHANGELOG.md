@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--` ends option parsing, so a path that starts with a dash can be
   explained.** `gid explain -- --weird-name` was a usage error; the usual escape
   hatch did not exist, so a file named like a flag could not be passed at all.
+- **`--flag=value` is accepted, so `--cwd=.` no longer reads as an unknown
+  option.** `gid list --cwd=.` answered `unknown option for 'gid list':
+  --cwd=.`; the parser only knew the two-token spelling. A boolean given a
+  value (`--why=1`) is now a usage error rather than being accepted and ignored.
 
 ## [0.1.9] - 2026-11-01
 
