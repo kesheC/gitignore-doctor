@@ -24,6 +24,7 @@ import { abbreviatePattern } from "./rules.js";
 import { generateIgnoreFile, ignoreFileTarget, listStacks } from "./init.js";
 import { matchPath } from "./matcher.js";
 import type { ExplainResult, Issue, IssueKind } from "./types.js";
+import { installPipeGuard } from "./pipe.js";
 
 const VERSION = "0.1.11";
 
@@ -646,6 +647,8 @@ const isMain = (() => {
     return false;
   }
 })();
+
+installPipeGuard();
 
 if (isMain) {
   main(process.argv.slice(2)).then(
