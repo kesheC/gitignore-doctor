@@ -12,7 +12,7 @@ import * as path from "node:path";
 
 import { explainPath } from "../src/resolve.js";
 import { checkRepo } from "../src/check.js";
-import { cleanup, git, gitIgnores, makeGitRepo } from "./helpers.js";
+import { cleanup, git, gitIgnores, makeDirs, makeGitRepo } from "./helpers.js";
 
 const roots: string[] = [];
 async function repo(files: Record<string, string>): Promise<string> {
@@ -218,5 +218,43 @@ describe("CLI exit codes (M3 M4 M6)", () => {
       expect(result.code).toBe(2);
       expect(result.stderr).toContain("unknown option");
     }
+  });
+
+  it("blames the path, not git, when --cwd is not there", async () => {
+    // `list` used to print "No ignore rules found" and exit 0 for a directory
+    // that does not exist, and the other commands said "not a git repository",
+    // which sends the reader looking at git when the path is the problem.
+    const root = await repo({ ".gitignore": "*.log\n" });
+    const missing = path.join(root, "no-such-subdir");
+    for (const command of ["list", "check", "explain"]) {
+      const args = command === "explain" ? [command, "a.log", "--cwd", missing] : [command, "--cwd", missing];
+      const result = runCli(args, root);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("no such directory");
+      expect(result.stderr).not.toContain("not a git repository");
+    }
+  });
+
+  it("says not a directory when --cwd points at a file", async () => {
+    const root = await repo({ ".gitignore": "*.log\n", "notes.txt": "x\n" });
+    const result = runCli(["list", "--cwd", path.join(root, "notes.txt")], root);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("not a directory");
+  });
+
+  it("still calls a real directory without a repository what it is", async () => {
+    const root = await makeDirs([]);
+    roots.push(root);
+    const result = runCli(["check", "--cwd", root], root);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("not a git repository");
+  });
+
+  it("treats everything after -- as a path, so a name that starts with a dash can be explained", async () => {
+    const root = await repo({ ".gitignore": "--weird-name\n" });
+    const result = runCli(["explain", "--", "--weird-name"], root);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("--weird-name");
+    expect(result.stdout).toContain("ignored");
   });
 });

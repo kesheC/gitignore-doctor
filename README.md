@@ -190,7 +190,26 @@ Four kinds of finding, each with a concrete fix:
 Exit codes: `0` clean, `1` when there is a LEAK or MISSING (or any finding
 with `--strict`), `2` on a usage error — including running it outside a git work
 tree, where `check` refuses to pretend the tree is clean. Unknown or misspelled
-options are also a `2`, never a silent no-op.
+options are also a `2`, never a silent no-op, and so is a `--cwd` that is not
+there:
+
+```text
+$ gid list --cwd ./no-such-dir
+gid: no such directory: /home/you/no-such-dir
+$ gid list --cwd ./package.json
+gid: not a directory: /home/you/package.json
+```
+
+Only a real directory can be "not a git repository"; saying that about a path
+that does not exist sends you looking at git when the path is the problem.
+
+`--` ends option parsing, so a path that begins with a dash can still be
+explained:
+
+```text
+$ gid explain -- --weird-name
+path:   --weird-name
+```
 
 ```bash
 gid check             # human readable, first 8 findings per kind
@@ -429,7 +448,24 @@ note:   the parent directory 'node_modules' is excluded, so git never looks insi
 
 退出码：`0` 干净，`1` 表示存在 LEAK 或 MISSING（`--strict` 下任何问题都为 `1`），
 `2` 表示用法错误 —— 包括在非 git 工作区里运行：这种情况下 `check` 会拒绝假装干净。
-拼错的选项同样是 `2`，绝不会被静默忽略。
+拼错的选项同样是 `2`，绝不会被静默忽略；`--cwd` 指向的位置不存在也是 `2`：
+
+```text
+$ gid list --cwd ./no-such-dir
+gid: no such directory: /home/you/no-such-dir
+$ gid list --cwd ./package.json
+gid: not a directory: /home/you/package.json
+```
+
+只有真实存在的目录才谈得上「不是 git 仓库」；对一个根本不存在的路径这么说，会让
+读者去查 git，而真正的问题在路径本身。
+
+`--` 会终止选项解析，所以以短横线开头的文件名照样能解释：
+
+```text
+$ gid explain -- --weird-name
+path:   --weird-name
+```
 
 ```bash
 gid check             # 人类可读，每类最多 8 条

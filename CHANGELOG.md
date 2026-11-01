@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--cwd` points at the path it cannot find instead of blaming git.** A
+  directory that does not exist produced `gid: not a git repository: <path>`,
+  which sends the reader looking at git when the path is the problem; `gid list`
+  was worse and printed `No ignore rules found` with exit 0. The three cases are
+  now told apart: `no such directory`, `not a directory`, and -- only when the
+  directory is real -- `not a git repository`.
+- **`--` ends option parsing, so a path that starts with a dash can be
+  explained.** `gid explain -- --weird-name` was a usage error; the usual escape
+  hatch did not exist, so a file named like a flag could not be passed at all.
+
 ## [0.1.9] - 2026-11-01
 
 ### Added

@@ -67,6 +67,27 @@ interface ParsedArgs {
   values: Map<string, string>;
 }
 
+/**
+ * Say what is actually wrong with --cwd.
+ *
+ * Returns null when the directory is usable. The point is to keep the three
+ * failure modes apart: a missing path, a path that is a file, and a real
+ * directory that simply is not a git work tree. Only the last one is the
+ * git problem, and it is reported further down by the commands that need a
+ * repository.
+ */
+async function checkDirectory(cwd: string): Promise<string | null> {
+  const resolved = path.resolve(cwd);
+  let info;
+  try {
+    info = await stat(resolved);
+  } catch {
+    return "no such directory: " + resolved;
+  }
+  if (!info.isDirectory()) return "not a directory: " + resolved;
+  return null;
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const flags = new Set<string>();
   const values = new Map<string, string>();
@@ -75,6 +96,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] as string;
+    // Everything after -- is a positional, even when it looks like a flag.
+    // Without this, `gid explain -- --weird-name` was a usage error, so a file
+    // whose name starts with a dash could not be explained at all.
+    if (arg === "--") {
+      positional.push(...argv.slice(i + 1));
+      break;
+    }
     if (arg.startsWith("--")) {
       const name = arg.slice(2);
       if (takesValue.has(name)) {
@@ -147,6 +175,16 @@ async function main(argv: string[]): Promise<number> {
 
   const cwd = args.values.get("cwd") ?? process.cwd();
   const json = args.flags.has("json");
+
+  // A --cwd that does not exist used to fall through to "not a git
+  // repository", which points the reader at git when the real problem is the
+  // path. `list` was worse: it printed "No ignore rules found" and exited 0.
+  const cwdProblem = await checkDirectory(cwd);
+  if (cwdProblem !== null) {
+    if (json) process.stdout.write(JSON.stringify({ error: cwdProblem }, null, 2) + "\n");
+    process.stderr.write("gid: " + cwdProblem + "\n");
+    return 2;
+  }
 
   try {
     assertKnownOptions(args.command, args);
