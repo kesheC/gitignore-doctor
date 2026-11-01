@@ -208,6 +208,25 @@ gid: not a directory: /home/you/package.json
 Only a real directory can be "not a git repository"; saying that about a path
 that does not exist sends you looking at git when the path is the problem.
 
+`--help` and `--version` are the only flags that are not scoped to a command,
+and they do not buy a misspelled flag a free pass. Options are validated before
+either of them runs, so a typo is still a typo:
+
+```text
+$ gid list --stict
+gid: unknown option for 'gid list': --stict
+$ gid --help --bogus
+gid: unknown option for 'gid': --bogus
+```
+
+`--version` answers a question about the tool, not about a command, so it is
+rejected there with the spelling that does work:
+
+```text
+$ gid check --version
+gid: --version is not supported by 'gid check'; it applies to "gid --version" on its own
+```
+
 `--` ends option parsing, so a path that begins with a dash can still be
 explained:
 
@@ -474,6 +493,24 @@ gid: not a directory: /home/you/package.json
 
 只有真实存在的目录才谈得上「不是 git 仓库」；对一个根本不存在的路径这么说，会让
 读者去查 git，而真正的问题在路径本身。
+
+`--help` 和 `--version` 是仅有的两个不归属于某个子命令的选项，但它们也不会替
+拼错的选项兜底。选项校验排在它们之前，所以拼错依旧是拼错：
+
+```text
+$ gid list --stict
+gid: unknown option for 'gid list': --stict
+$ gid --help --bogus
+gid: unknown option for 'gid': --bogus
+```
+
+`--version` 回答的是「这个工具是什么版本」，不是某个子命令的选项，所以在子命令
+后面会直接拒绝，并给出真正能用的写法：
+
+```text
+$ gid check --version
+gid: --version is not supported by 'gid check'; it applies to "gid --version" on its own
+```
 
 `--` 会终止选项解析，所以以短横线开头的文件名照样能解释：
 

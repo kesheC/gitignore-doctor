@@ -37,7 +37,8 @@ Usage:
 
 Commands:
   explain   Explain whether a path is ignored, which rule won, and why.
-  check     Audit the repository: LEAK / MISSING / DEAD / CONFLICT findings.
+  check     Audit the repository: LEAK / MISSING / INVALID / DEAD / CONFLICT
+            findings.
   list      List every active rule with the number of files it matches.
   init      Generate a .gitignore from detected stacks.
 
@@ -45,7 +46,7 @@ Options:
   --cwd <dir>   Run as if started in <dir>. Defaults to the current directory.
   --json        Machine readable output.
   --global      Also apply core.excludesFile / ~/.config/git/ignore.
-  --strict      In check: treat DEAD and CONFLICT as failures too.
+  --strict      In check: treat INVALID, DEAD and CONFLICT as failures too.
   --all         In check: print every finding (the default prints 8 per kind,
                 then a line saying how many more there are).
   --verbose     In check: blunt advice for DEAD rules (default advice says a
@@ -53,7 +54,7 @@ Options:
   --why         In list: add a per-rule explanation.
   --force       In init: overwrite an existing .gitignore.
   -h, --help    Show this help.
-  -v, --version Show the version.
+  -v, --version Show the version. Top level only: not after a command.
 
 Exit codes:
   0  clean / explained successfully
@@ -149,18 +150,28 @@ const COMMAND_OPTIONS: Record<string, string[]> = {
   init: ["cwd", "json", "detect", "force"],
 };
 
-/** Reject flags the chosen subcommand does not implement. */
+/** Flags that mean the same thing on every command. */
+const GLOBAL_FLAGS = ["help", "version"];
+
+/**
+ * Reject flags the chosen subcommand does not implement.
+ *
+ * `--help` and `--version` are accepted everywhere; everything else must be
+ * declared for the command. Checking this before the help branch matters: with
+ * the help branch first, `gid list --stict` printed the help text and exited 0,
+ * so a misspelled flag looked accepted.
+ */
 function assertKnownOptions(command: string, args: ParsedArgs): void {
-  const allowed = COMMAND_OPTIONS[command];
-  if (!allowed) return;
-  const permitted = new Set(allowed);
+  const declared = COMMAND_OPTIONS[command];
+  const permitted = new Set([...(declared ?? []), ...GLOBAL_FLAGS]);
+  const where = declared === undefined ? "gid" : "gid " + command;
   for (const flag of args.flags) {
     if (permitted.has(flag)) continue;
-    throw new UsageError("unknown option for 'gid " + command + "': --" + flag);
+    throw new UsageError("unknown option for '" + where + "': --" + flag);
   }
   for (const name of args.values.keys()) {
     if (permitted.has(name)) continue;
-    throw new UsageError("unknown option for 'gid " + command + "': --" + name);
+    throw new UsageError("unknown option for '" + where + "': --" + name);
   }
 }
 
@@ -173,9 +184,26 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
+  // Unknown options are reported before help or version so a typo can never
+  // exit 0. A bare "gid --bogus" used to print the whole help text on stdout
+  // and still exit 2, which is the worst of both: the message a script cannot
+  // read, and the exit code of a usage error.
+  try {
+    assertKnownOptions(args.command, args);
+  } catch (error) {
+    process.stderr.write("gid: " + (error as Error).message + "\n");
+    return 2;
+  }
+
   // --version is checked before the help fallback, otherwise a bare
   // "gid --version" (no subcommand) would be treated as a usage error.
   if (args.flags.has("version")) {
+    if (args.command !== "") {
+      process.stderr.write(
+        "gid: --version is not supported by 'gid " + args.command + "'; it applies to \"gid --version\" on its own\n",
+      );
+      return 2;
+    }
     process.stdout.write(VERSION + "\n");
     return 0;
   }
@@ -198,7 +226,6 @@ async function main(argv: string[]): Promise<number> {
   }
 
   try {
-    assertKnownOptions(args.command, args);
     switch (args.command) {
       case "explain":
         return await runExplain(args, cwd, json);

@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rule text in findings and in `list` is abbreviated.** A pathological line is
   quoted as `xxxx... (40000 characters)` instead of being pasted into every
   DEAD, CONFLICT and INVALID message.
+- **A misspelled flag is reported even when `--help` is also on the line.**
+  The help branch ran before the per-command option check, so `gid list --stict`
+  printed the help text and exited 0, and `gid --bogus` printed help on stdout
+  while exiting 2 -- the one combination a script cannot read. Options are now
+  validated first: `gid list --stict` exits 2 with
+  `gid: unknown option for 'gid list': --stict`.
+- **`--version` is a top-level request, not a per-command flag.** `gid check
+  --version` used to print the version and exit 0; it now exits 2 with
+  `--version is not supported by 'gid check'; it applies to "gid --version" on its
+  own`, which is what the other commands in this family say.
 
 ## [0.1.10] - 2026-11-01
 

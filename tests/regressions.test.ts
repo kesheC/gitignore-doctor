@@ -266,6 +266,30 @@ describe("CLI exit codes (M3 M4 M6)", () => {
     expect(result.stderr).toContain("not a git repository");
   });
 
+  it("reports a misspelled flag even when --help is also on the line", async () => {
+    // The help branch ran first, so `gid list --stict` printed the help text and
+    // exited 0: a typo looked like a request for help instead of a mistake.
+    const root = await repo({ ".gitignore": "*.log\n" });
+    for (const args of [["--bogus"], ["--help", "--bogus"], ["--bogus", "--help"], ["list", "--stict"]]) {
+      const result = runCli(args, root);
+      expect(result.code).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("unknown option");
+    }
+  });
+
+  it("keeps --version a top-level request, not a per-command flag", async () => {
+    const root = await repo({ ".gitignore": "*.log\n" });
+    const top = runCli(["--version"], root);
+    expect(top.code).toBe(0);
+    expect(top.stdout.trim()).toBe("0.1.10");
+    for (const command of ["check", "list", "explain", "init"]) {
+      const result = runCli([command, "--version"], root);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("--version is not supported by 'gid " + command + "'");
+    }
+  });
+
   it("reports a pattern V8 refuses to compile instead of dying on it", async () => {
     // V8 compiles a regular expression on first use, so a .gitignore line of
     // 40 000 characters sailed through parsing and then threw "Regular
