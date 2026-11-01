@@ -65,19 +65,26 @@ gid check
 
 Real output, run against a copy of a real 53-line `.gitignore` in a temp repo
 (DEAD findings truncated — the real run printed 39 of them). The fixture lives
-in this repo, so you can reproduce it line for line; the script prints the
-`gid check` command to run against it:
+in this repo, so you can reproduce it line for line:
 
 ```bash
 node demo/make-fixture.mjs
 ```
 
-Paths are printed as `<temp>/...` here; your own machine will print its real
-temp directory. Nothing else is rewritten.
+That prints the temp directory it wrote; run the check there (a `gid check` in
+this repository's own root reports a different tree, because its `.gitignore` is
+a different file). Paths are printed as `<temp>/...` here; your own machine will
+print its real temp directory. Nothing else is rewritten.
 
 ```text
-$ gid check
-repository: <temp>/gid-demo
+$ node demo/make-fixture.mjs
+wrote /tmp/gid-demo (1 tracked file that should be ignored, 1 unignored .env)
+
+  node demo/make-fixture.mjs && gid check --cwd "/tmp/gid-demo"
+
+Clean up with: node demo/make-fixture.mjs --clean
+$ cd /tmp/gid-demo && gid check
+repository: /tmp/gid-demo
 scanned:    4 entries, 1 ignore file(s)
 
 LEAK - tracked despite being ignored (1)
@@ -132,7 +139,7 @@ options, so a path that starts with a dash can still be named.
 Why is this path ignored? Which file, which line, which rule won?
 
 ```bash
-gid explain node_modules/left-pad/index.js
+cd /tmp/gid-demo && gid explain node_modules/left-pad/index.js
 ```
 
 ```text
@@ -141,15 +148,16 @@ status: ignored
 rule:   .gitignore:40  "node_modules/"  (directory-only match on ancestor "node_modules")
 chain:  node_modules -> .gitignore#40 (excluded)
 git:    untracked
-note:   the parent directory 'node_modules' is excluded, so git never looks inside it; re-including a child needs the parent re-included first.
+note:   the parent directory 'node_modules' is excluded, so git never looks inside it; re-including a child needs the parent re-included first. (the path does not exist on disk; rules are still evaluated)
 ```
 
-The `chain` line is the whole point: it shows every level git walked, from the
+`left-pad` is not installed in the fixture, so the run says so and still answers —
+asking before you commit is the whole point. The `chain` line is the whole point: it shows every level git walked, from the
 repository root down to the path you asked about. When the file is tracked anyway,
 the output says so:
 
 ```text
-$ gid explain trace.log
+$ cd /tmp/gid-demo && gid explain trace.log
 path:   trace.log
 status: ignored
 rule:   .gitignore:47  "*.log"  (match on this file)
@@ -159,16 +167,19 @@ note:   git keeps tracking this path until you run `git rm -r --cached trace.log
 ```
 
 `--json` gives machine-readable fields (`path`, `ignored`, `source`, `line`,
-`pattern`, `reason`, `whitelistedBy`, ...):
+`pattern`, `reason`, `whitelistedBy`, ...). Run in the fixture, where `.env`
+exists; against a path that is not on disk, `exists` is `false` and `reason`
+says so:
 
-```json
-$ gid explain .env --json
+```text
+$ cd /tmp/gid-demo && gid explain .env --json
 {
   "path": ".env",
   "ignored": false,
   "source": null,
   "line": null,
   "pattern": null,
+  "patternError": null,
   "reason": "no ignore rule matches this path",
   "whitelistedBy": null,
   "matchedPath": null,
@@ -212,7 +223,7 @@ With `--json` on the line, every failure is a document on stdout instead of a
 silence, so a wrapper can read the reason the same way it reads a report:
 
 ```text
-$ gid check --json --cwd ./no-such-dir; echo "exit=$?"
+$ gid check --json --cwd ./no-such-dir 2>/dev/null; echo "exit=$?"
 {
   "error": {
     "message": "no such directory: /home/you/no-such-dir",
@@ -250,6 +261,11 @@ explained:
 ```text
 $ gid explain -- --weird-name
 path:   --weird-name
+status: not ignored
+rule:   (none)
+chain:  --weird-name -> - (no-match)
+git:    untracked
+note:   no ignore rule matches this path (and it does not exist on disk) (the path does not exist on disk; rules are still evaluated)
 ```
 
 ```bash
@@ -263,22 +279,22 @@ gid check --json      # full machine-readable report
 ### `gid list [--why]`
 
 Every active rule with how many files it actually matches — the fastest way to
-spot a `.gitignore` that has rotted:
+spot a `.gitignore` that has rotted. The fixture has 40 rules and `gid list`
+prints all of them; the run below is elided in the middle:
 
 ```text
-$ gid list
-repository: <temp>/gid-demo
+$ cd /tmp/gid-demo && gid list | head -9
+repository: /tmp/gid-demo
 
 .gitignore
      2  .dsh-meow/                             0  (matches 0)
      3  .dsh-mattskillsdeck-cache/             0  (matches 0)
      4  .dsh-pocket/                           0  (matches 0)
      5  .dsh/                                  0  (matches 0)
-   ...
-    40  node_modules/                          0  (matches 0)
-   ...
-    47  *.log                                  1
-    48  tmp/                                   0  (matches 0)
+     6  *.db-shm                               0  (matches 0)
+     7  *.db-wal                               0  (matches 0)
+$ cd /tmp/gid-demo && gid list | tail -4
+    53  *~                                     0  (matches 0)
 
 total: 40 rule(s)
 hits = files whose name matches the pattern, counted before later rules win; they are not the number of files this rule actually ignores.
@@ -298,11 +314,15 @@ turns it into DEAD findings.
 ### `gid init [--detect] [--force]`
 
 Detect the stacks from directory markers and generate a grouped `.gitignore`,
-naming the evidence for every section:
+naming the evidence for every section. Run it inside a git work tree — `init`
+refuses to guess where the repository is, so a plain directory gets
+`gid: not a git repository: ... (run git init first, or pass --cwd)` and exit `2`:
 
 ```text
+$ rm -rf /tmp/gid-init-demo && mkdir /tmp/gid-init-demo && cd /tmp/gid-init-demo && git init -q .
+$ printf '{"name":"demo"}' > package.json && printf '[tool]\n' > pyproject.toml
 $ gid init
-wrote <temp>/gid-init-demo/.gitignore
+wrote /tmp/gid-init-demo/.gitignore
 detected:
   node         <- package.json
   python       <- pyproject.toml
@@ -448,14 +468,15 @@ gid check
 
 真实输出（针对一份 53 行的真实 `.gitignore` 副本，在临时仓库里运行）。这里只摘出结尾
 两行汇总，实际打印了 39 条 DEAD；完整输出见上方英文章节。这个临时仓库由仓库里自带的
-脚本生成，输出可以逐行复现（只有临时目录路径与本机不同）：
+脚本生成，输出可以逐行复现（只有临时目录路径与本机不同）。注意要在脚本打印的那个
+临时目录里跑 —— 在本仓库根目录跑，扫的是另一棵树（`.gitignore` 不是同一份）：
 
 ```bash
 node demo/make-fixture.mjs
+cd "$(node demo/make-fixture.mjs | head -1 | sed 's/^wrote //; s/ (1 tracked.*//')" && gid check
 ```
 
 ```text
-$ gid check
 summary: 1 leak, 1 missing, 0 invalid, 39 dead, 0 conflict
 result:  FAIL (2 blocking)
 ```
@@ -472,13 +493,13 @@ result:  FAIL (2 blocking)
 这个路径为什么被忽略？是谁、哪一行、哪条规则干的？
 
 ```text
-$ gid explain node_modules/left-pad/index.js
+$ cd /tmp/gid-demo && gid explain node_modules/left-pad/index.js
 path:   node_modules/left-pad/index.js
 status: ignored
 rule:   .gitignore:40  "node_modules/"  (directory-only match on ancestor "node_modules")
 chain:  node_modules -> .gitignore#40 (excluded)
 git:    untracked
-note:   the parent directory 'node_modules' is excluded, so git never looks inside it; re-including a child needs the parent re-included first.
+note:   the parent directory 'node_modules' is excluded, so git never looks inside it; re-including a child needs the parent re-included first. (the path does not exist on disk; rules are still evaluated)
 ```
 
 `chain` 是重点：它列出 git 从仓库根一路走到目标路径经过的每一层。如果文件其实已被
@@ -536,6 +557,11 @@ gid: --version is not supported by 'gid check'; it applies to "gid --version" on
 ```text
 $ gid explain -- --weird-name
 path:   --weird-name
+status: not ignored
+rule:   (none)
+chain:  --weird-name -> - (no-match)
+git:    untracked
+note:   no ignore rule matches this path (and it does not exist on disk) (the path does not exist on disk; rules are still evaluated)
 ```
 
 ```bash
@@ -564,11 +590,15 @@ gid check --json      # 完整机器可读报告
 
 ### `gid init [--detect] [--force]`
 
-根据目录里的标记文件识别技术栈，生成分组 `.gitignore`，并**说明识别依据**：
+根据目录里的标记文件识别技术栈，生成分组 `.gitignore`，并**说明识别依据**。
+必须在 git 工作区里跑 —— `init` 不猜仓库根在哪，普通目录会得到
+`gid: not a git repository: ... (run git init first, or pass --cwd)` 与退出码 `2`：
 
 ```text
+$ rm -rf /tmp/gid-init-demo && mkdir /tmp/gid-init-demo && cd /tmp/gid-init-demo && git init -q .
+$ printf '{"name":"demo"}' > package.json && printf '[tool]\n' > pyproject.toml
 $ gid init
-wrote <temp>/gid-init-demo/.gitignore
+wrote /tmp/gid-init-demo/.gitignore
 detected:
   node         <- package.json
   python       <- pyproject.toml
