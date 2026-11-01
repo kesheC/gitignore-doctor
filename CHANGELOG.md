@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-11-01
+
 ### Fixed
 
 - **A pattern V8 refuses to compile is a finding, not a crash.** One
@@ -38,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{"error":{"message":...,"exitCode":n}}`, the same shape as the rest of this
   set, and an unknown command is answered before its options. Without `--json`
   stdout stays empty.
+
+### Quality
+
+- 104 tests across 10 spec files, 2364 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20 and 22.
+- Zero runtime dependencies.
 
 ## [0.1.10] - 2026-11-01
 
@@ -247,7 +255,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI matrix: Ubuntu and Windows, Node 20 and 22.
 - Zero runtime dependencies.
 
-[Unreleased]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.10...HEAD
+[0.1.11]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.10...v0.1.11
+[Unreleased]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.11...HEAD
 [0.1.10]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.7...v0.1.8

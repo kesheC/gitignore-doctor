@@ -7,12 +7,18 @@
  */
 import { describe, expect, it, afterEach } from "vitest";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { writeFile, mkdir } from "node:fs/promises";
 import * as path from "node:path";
 
 import { explainPath } from "../src/resolve.js";
 import { checkRepo } from "../src/check.js";
 import { cleanup, git, gitIgnores, makeDirs, makeGitRepo } from "./helpers.js";
+
+function pkgVersion(): string {
+  const file = path.resolve("package.json");
+  return JSON.parse(readFileSync(file, "utf8")).version as string;
+}
 
 const roots: string[] = [];
 async function repo(files: Record<string, string>): Promise<string> {
@@ -282,7 +288,10 @@ describe("CLI exit codes (M3 M4 M6)", () => {
     const root = await repo({ ".gitignore": "*.log\n" });
     const top = runCli(["--version"], root);
     expect(top.code).toBe(0);
-    expect(top.stdout.trim()).toBe("0.1.10");
+    // Compared against package.json rather than a literal: this assertion used
+    // to hard-code the version, so every release bumped it by hand and a
+    // forgotten bump failed here instead of where the drift really was.
+    expect(top.stdout.trim()).toBe(pkgVersion());
     for (const command of ["check", "list", "explain", "init"]) {
       const result = runCli([command, "--version"], root);
       expect(result.code).toBe(2);
