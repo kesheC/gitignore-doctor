@@ -17,10 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   throwaway fixtures -- the tag gate against matching, drifted, non-semver and
   prerelease tags; the package-contents assertion against a complete manifest,
   a stray `.js.map`, an empty `dist/` and a leaked `src/`. 21 cases, up from 7.
-- **Rewriting the tests lost three guards; all three are back.** The release is
-  re-published with `gh release edit --draft=false` before any upload, **both**
-  bins (`gid` and `gitignore-doctor`) are smoke tested -- one alias can break
-  while the other keeps working -- and `npm run build` still clears `dist/`.
+- **One guard the old test did not have: `dist/` is cleared.** `npm run clean`
+  existed at v0.1.7 but nothing asserted it, so deleting the line from
+  `package.json` would have gone green. The test now checks that `build` chains
+  `npm run clean` and that `clean` actually removes `dist/`.
+
 ## [0.1.7] - 2026-11-01
 
 ### Fixed
@@ -168,7 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI matrix: Ubuntu and Windows, Node 20 and 22.
 - Zero runtime dependencies.
 
-[Unreleased]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.3...v0.1.4
