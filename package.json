@@ -1,6 +1,6 @@
 {
   "name": "gitignore-doctor",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "gid — explain & audit .gitignore rules: why a path is ignored, which file and line did it, and what's silently leaking into your repo.",
   "type": "module",
   "bin": {
@@ -27,6 +27,8 @@
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "precoverage": "npm run build",
+    "coverage": "vitest run --coverage",
     "dev": "npm run build && node dist/cli.js",
     "demo": "node demo/make-fixture.mjs",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
@@ -46,7 +48,8 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2",
+    "@vitest/coverage-v8": "^4.1.12",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.12"
   },
   "repository": {
