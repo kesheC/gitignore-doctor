@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exact rot `gid` exists to find. `tests/demo.test.ts` now generates the fixture, parses its
   `.gitignore`, runs `checkRepo` over it and asserts all seven documented numbers (the English
   and Chinese line count, the rule count and the four dead-rule counts) against that run.
+- **The contributing guide still said the README transcripts are not re-run by CI.** That
+  stopped being true when `tests/demo.test.ts` landed: it runs `demo/make-fixture.mjs`, parses
+  the generated `.gitignore` and asserts the seven numbers the demo paragraphs quote. The guide
+  now says which blocks are under test and which were checked by hand.
 
 ## [0.1.14] - 2026-11-02
 
