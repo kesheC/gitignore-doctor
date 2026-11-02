@@ -27,7 +27,7 @@
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dev": "node --experimental-strip-types src/cli.ts",
+    "dev": "npm run build && node dist/cli.js",
     "demo": "node demo/make-fixture.mjs",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "npm run build"
