@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The README's demo numbers had nothing watching them.** "a real 53-line `.gitignore`",
+  "The fixture has 40 rules" and the three sentences quoting "39" all describe
+  `demo/make-fixture.mjs`, not a committed file, so editing the fixture would have left every
+  quoted number describing a tree that no longer exists while every gate stayed green — the
+  exact rot `gid` exists to find. `tests/demo.test.ts` now generates the fixture, parses its
+  `.gitignore`, runs `checkRepo` over it and asserts all seven documented numbers (the English
+  and Chinese line count, the rule count and the four dead-rule counts) against that run.
+
 ## [0.1.14] - 2026-11-02
 
 ### Added
