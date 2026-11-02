@@ -60,7 +60,7 @@ body:
     attributes:
       label: gitignore-doctor version
       description: The output of `gid --version`.
-      placeholder: 0.1.15
+      placeholder: 0.1.17
     validations:
       required: true
 

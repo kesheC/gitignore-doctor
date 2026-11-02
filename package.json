@@ -1,6 +1,6 @@
 {
   "name": "gitignore-doctor",
-  "version": "0.1.15",
+  "version": "0.1.17",
   "description": "gid — explain & audit .gitignore rules: why a path is ignored, which file and line did it, and what's silently leaking into your repo.",
   "type": "module",
   "bin": {
