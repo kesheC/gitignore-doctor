@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-11-02
+
 ### Fixed
 
 - **The README's demo numbers had nothing watching them.** "a real 53-line `.gitignore`",
@@ -20,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped being true when `tests/demo.test.ts` landed: it runs `demo/make-fixture.mjs`, parses
   the generated `.gitignore` and asserts the seven numbers the demo paragraphs quote. The guide
   now says which blocks are under test and which were checked by hand.
+
+### Quality
+
+- 107 tests across 12 spec files, 2397 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20, 22 and 24.
+- Zero runtime dependencies.
+
 
 ## [0.1.14] - 2026-11-02
 
@@ -355,7 +364,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.12]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.11...v0.1.12
 [0.1.13]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.12...v0.1.13
 [0.1.14]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.13...v0.1.14
-[Unreleased]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.14...HEAD
+[0.1.15]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.14...v0.1.15
+[Unreleased]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.15...HEAD
 [0.1.10]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/gitignore-doctor/compare/v0.1.7...v0.1.8
