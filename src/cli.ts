@@ -26,7 +26,7 @@ import { matchPath } from "./matcher.js";
 import type { ExplainResult, Issue, IssueKind } from "./types.js";
 import { installPipeGuard } from "./pipe.js";
 
-const VERSION = "0.1.19";
+const VERSION = "0.1.20";
 
 const HELP = `gid - explain & audit .gitignore rules
 
